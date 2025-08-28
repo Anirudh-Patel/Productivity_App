@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useEffect } from 'react'
 import { 
   Home, 
   CheckSquare, 
@@ -8,6 +9,7 @@ import {
   Swords,
   Trophy
 } from 'lucide-react'
+import { useGameStore } from '../../../store/gameStore'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: Home },
@@ -18,6 +20,24 @@ const navItems = [
 ]
 
 const Sidebar = () => {
+  const { user, fetchUser } = useGameStore();
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+
+  const userLevel = user?.level || 1;
+  const currentXP = user?.experience_points || 0;
+  const xpToNext = user?.experience_to_next_level || 100;
+  const currentHP = user?.current_health || 100;
+  const maxHP = user?.max_health || 100;
+  const currentEnergy = user?.current_energy || 100;
+  const maxEnergy = user?.max_energy || 100;
+
+  const xpPercent = Math.max(0, Math.min(100, (currentXP / (currentXP + xpToNext)) * 100));
+  const hpPercent = Math.max(0, Math.min(100, (currentHP / maxHP) * 100));
+  const energyPercent = Math.max(0, Math.min(100, (currentEnergy / maxEnergy) * 100));
+
   return (
     <aside className="w-64 bg-solo-primary border-r border-gray-800">
       <div className="p-6">
@@ -36,7 +56,7 @@ const Sidebar = () => {
             </div>
             <div>
               <p className="text-sm text-gray-400">Level</p>
-              <p className="text-lg font-bold">1</p>
+              <p className="text-lg font-bold">{userLevel}</p>
             </div>
           </div>
           
@@ -44,12 +64,12 @@ const Sidebar = () => {
           <div className="mt-3">
             <div className="flex justify-between text-xs text-gray-400 mb-1">
               <span>XP</span>
-              <span>0 / 100</span>
+              <span>{currentXP} / {currentXP + xpToNext}</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-solo-accent to-solo-secondary transition-all duration-500"
-                style={{ width: '0%' }}
+                style={{ width: `${xpPercent}%` }}
               />
             </div>
           </div>
@@ -58,12 +78,12 @@ const Sidebar = () => {
           <div className="mt-3">
             <div className="flex justify-between text-xs text-gray-400 mb-1">
               <span>HP</span>
-              <span>100 / 100</span>
+              <span>{currentHP} / {maxHP}</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500"
-                style={{ width: '100%' }}
+                style={{ width: `${hpPercent}%` }}
               />
             </div>
           </div>
@@ -72,12 +92,12 @@ const Sidebar = () => {
           <div className="mt-3">
             <div className="flex justify-between text-xs text-gray-400 mb-1">
               <span>Energy</span>
-              <span>100 / 100</span>
+              <span>{currentEnergy} / {maxEnergy}</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500"
-                style={{ width: '100%' }}
+                style={{ width: `${energyPercent}%` }}
               />
             </div>
           </div>
