@@ -12,7 +12,7 @@ const Shop = () => {
         <div className="text-center py-12 text-gray-400">
           <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>Shop is coming soon!</p>
-          <p className="text-sm mt-2">Earn gold and gems to unlock rewards</p>
+          <p className="text-sm mt-2">Earn gold to unlock rewards</p>
         </div>
       </div>
     </div>

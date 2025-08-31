@@ -113,6 +113,49 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  updateTaskProgress: async (taskId: number, progressAmount: number) => {
+    try {
+      const updatedTask: Task = await invoke('update_task_progress', { 
+        taskId, 
+        progressAmount 
+      });
+      
+      set(state => {
+        if (updatedTask.status === 'completed') {
+          // Task was completed, move it to completed list
+          return {
+            tasks: {
+              ...state.tasks,
+              active: state.tasks.active.filter(t => t.id !== taskId),
+              completed: [updatedTask, ...state.tasks.completed]
+            }
+          };
+        } else {
+          // Update the task in active list
+          return {
+            tasks: {
+              ...state.tasks,
+              active: state.tasks.active.map(t => 
+                t.id === taskId ? updatedTask : t
+              )
+            }
+          };
+        }
+      });
+
+      // If task was completed, refresh user data
+      if (updatedTask.status === 'completed') {
+        get().fetchUser();
+        get().checkAchievements();
+      }
+      
+      return updatedTask;
+    } catch (error) {
+      console.error('Failed to update task progress:', error);
+      throw error;
+    }
+  },
+
   fetchAchievements: async () => {
     set(state => ({
       achievements: { ...state.achievements, loading: true }

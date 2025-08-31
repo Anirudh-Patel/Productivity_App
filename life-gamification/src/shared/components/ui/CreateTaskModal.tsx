@@ -12,12 +12,14 @@ interface CreateTaskModalProps {
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
   const { createTask } = useGameStore();
   const [loading, setLoading] = useState(false);
+  const [taskType, setTaskType] = useState<'standard' | 'goal'>('standard');
   const [formData, setFormData] = useState<CreateTaskRequest>({
     title: '',
     description: '',
     category: 'general',
     difficulty: 5,
     priority: 3,
+    task_type: 'standard',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +37,9 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         category: 'general',
         difficulty: 5,
         priority: 3,
+        task_type: 'standard',
       });
+      setTaskType('standard');
       onClose();
     } catch (error) {
       console.error('Failed to create task:', error);
@@ -116,6 +120,83 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
             </select>
           </div>
 
+          {/* Task Type */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Quest Type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTaskType('standard');
+                  setFormData({ ...formData, task_type: 'standard', goal_target: undefined, goal_unit: undefined });
+                }}
+                className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
+                  taskType === 'standard' 
+                    ? 'bg-solo-accent/20 border-solo-accent text-solo-accent' 
+                    : 'bg-solo-bg border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                Standard Quest
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTaskType('goal');
+                  setFormData({ ...formData, task_type: 'goal' });
+                }}
+                className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
+                  taskType === 'goal' 
+                    ? 'bg-solo-accent/20 border-solo-accent text-solo-accent' 
+                    : 'bg-solo-bg border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                Goal-Based Quest
+              </button>
+            </div>
+          </div>
+
+          {/* Goal Settings (only shown for goal-based tasks) */}
+          {taskType === 'goal' && (
+            <div className="space-y-3 p-3 bg-solo-bg rounded-lg border border-gray-700">
+              <div className="text-sm font-medium text-solo-accent">Goal Settings</div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label htmlFor="goal-target" className="block text-xs text-gray-400 mb-1">
+                    Target Amount *
+                  </label>
+                  <input
+                    id="goal-target"
+                    type="number"
+                    min="1"
+                    required={taskType === 'goal'}
+                    value={formData.goal_target || ''}
+                    onChange={(e) => setFormData({ ...formData, goal_target: parseInt(e.target.value) || undefined })}
+                    className="w-full px-3 py-2 bg-solo-primary border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                    placeholder="100"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="goal-unit" className="block text-xs text-gray-400 mb-1">
+                    Unit (e.g., pushups, calories)
+                  </label>
+                  <input
+                    id="goal-unit"
+                    type="text"
+                    value={formData.goal_unit || ''}
+                    onChange={(e) => setFormData({ ...formData, goal_unit: e.target.value })}
+                    className="w-full px-3 py-2 bg-solo-primary border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                    placeholder="pushups"
+                  />
+                </div>
+              </div>
+              <div className="text-xs text-gray-400">
+                Example: "100 pushups", "2000 calories", "10000 steps"
+              </div>
+            </div>
+          )}
+
           {/* Difficulty */}
           <div>
             <label htmlFor="difficulty" className="block text-sm font-medium mb-2">
@@ -137,7 +218,7 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
             <div className="text-sm text-gray-400 mt-2">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4" />
-                <span>XP: {difficultyInfo.xp} | Energy: {difficultyInfo.energy}</span>
+                <span>XP: {difficultyInfo.xp}</span>
               </div>
             </div>
           </div>

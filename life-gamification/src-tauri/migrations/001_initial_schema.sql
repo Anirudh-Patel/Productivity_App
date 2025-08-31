@@ -17,15 +17,12 @@ CREATE TABLE IF NOT EXISTS users (
     charisma INTEGER DEFAULT 10,
     luck INTEGER DEFAULT 10,
     
-    -- Health/energy system
+    -- Health system
     current_health INTEGER DEFAULT 100,
     max_health INTEGER DEFAULT 100,
-    current_energy INTEGER DEFAULT 100,
-    max_energy INTEGER DEFAULT 100,
     
-    -- Currencies
+    -- Currency
     gold INTEGER DEFAULT 0,
-    gems INTEGER DEFAULT 0,
     
     -- Settings
     theme_preference TEXT DEFAULT 'solo_leveling'
@@ -50,7 +47,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     -- Status
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed', 'archived')),
     priority INTEGER DEFAULT 3 CHECK (priority BETWEEN 1 AND 5),
-    energy_cost INTEGER DEFAULT 10,
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME

@@ -31,12 +31,9 @@ const Sidebar = () => {
   const xpToNext = user?.experience_to_next_level || 100;
   const currentHP = user?.current_health || 100;
   const maxHP = user?.max_health || 100;
-  const currentEnergy = user?.current_energy || 100;
-  const maxEnergy = user?.max_energy || 100;
 
   const xpPercent = Math.max(0, Math.min(100, (currentXP / (currentXP + xpToNext)) * 100));
   const hpPercent = Math.max(0, Math.min(100, (currentHP / maxHP) * 100));
-  const energyPercent = Math.max(0, Math.min(100, (currentEnergy / maxEnergy) * 100));
 
   return (
     <aside className="w-64 bg-solo-primary border-r border-gray-800">
@@ -84,20 +81,6 @@ const Sidebar = () => {
               <div 
                 className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500"
                 style={{ width: `${hpPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Energy Bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>Energy</span>
-              <span>{currentEnergy} / {maxEnergy}</span>
-            </div>
-            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500"
-                style={{ width: `${energyPercent}%` }}
               />
             </div>
           </div>

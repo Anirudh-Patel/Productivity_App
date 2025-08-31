@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star } from 'lucide-react'
+import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
 import { DIFFICULTY_LEVELS } from '../../types';
 import type { Task } from '../../types';
 import CreateTaskModal from '../../shared/components/ui/CreateTaskModal';
+import UpdateProgressModal from '../../shared/components/ui/UpdateProgressModal';
 
 const Tasks = () => {
   const { tasks, fetchTasks, completeTask } = useGameStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [progressModal, setProgressModal] = useState<{ isOpen: boolean; task: Task | null }>({ 
+    isOpen: false, 
+    task: null 
+  });
   const [filter, setFilter] = useState<string>('active');
 
   useEffect(() => {
@@ -98,7 +103,8 @@ const Tasks = () => {
             <TaskCard 
               key={task.id} 
               task={task} 
-              onComplete={() => handleCompleteTask(task.id)} 
+              onComplete={() => handleCompleteTask(task.id)}
+              onUpdateProgress={() => setProgressModal({ isOpen: true, task })} 
             />
           ))
         )}
@@ -108,6 +114,14 @@ const Tasks = () => {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
       />
+      
+      {progressModal.task && (
+        <UpdateProgressModal
+          isOpen={progressModal.isOpen}
+          onClose={() => setProgressModal({ isOpen: false, task: null })}
+          task={progressModal.task}
+        />
+      )}
     </div>
   )
 }
@@ -115,9 +129,10 @@ const Tasks = () => {
 interface TaskCardProps {
   task: Task;
   onComplete: () => void;
+  onUpdateProgress: () => void;
 }
 
-const TaskCard = ({ task, onComplete }: TaskCardProps) => {
+const TaskCard = ({ task, onComplete, onUpdateProgress }: TaskCardProps) => {
   const difficultyInfo = DIFFICULTY_LEVELS[task.difficulty as keyof typeof DIFFICULTY_LEVELS];
   
   return (
@@ -135,6 +150,29 @@ const TaskCard = ({ task, onComplete }: TaskCardProps) => {
             <p className="text-gray-400 text-sm mb-3">{task.description}</p>
           )}
           
+          {/* Progress bar for goal-based tasks */}
+          {task.task_type === 'goal' && task.goal_target && (
+            <div className="mb-3">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Progress</span>
+                <span>
+                  {task.goal_current || 0} / {task.goal_target} {task.goal_unit || 'units'}
+                </span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-solo-accent to-solo-secondary transition-all duration-500"
+                  style={{ 
+                    width: `${Math.min(100, ((task.goal_current || 0) / task.goal_target) * 100)}%` 
+                  }}
+                />
+              </div>
+              <div className="text-xs text-gray-400 mt-1 text-right">
+                {Math.min(100, ((task.goal_current || 0) / task.goal_target) * 100).toFixed(1)}% Complete
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <span className="flex items-center gap-1">
               <Sword className="w-4 h-4" />
@@ -145,6 +183,11 @@ const TaskCard = ({ task, onComplete }: TaskCardProps) => {
               {task.gold_reward} Gold
             </span>
             <span className="capitalize">{task.category}</span>
+            {task.task_type === 'goal' && (
+              <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+                Goal Quest
+              </span>
+            )}
             {task.completed_at && (
               <span className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
@@ -155,12 +198,24 @@ const TaskCard = ({ task, onComplete }: TaskCardProps) => {
         </div>
         
         {task.status === 'active' && (
-          <button
-            onClick={onComplete}
-            className="ml-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-          >
-            Complete
-          </button>
+          <div className="ml-4 flex flex-col gap-2">
+            {task.task_type === 'goal' ? (
+              <button
+                onClick={onUpdateProgress}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Update Progress
+              </button>
+            ) : (
+              <button
+                onClick={onComplete}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                Complete
+              </button>
+            )}
+          </div>
         )}
         
         {task.status === 'completed' && (

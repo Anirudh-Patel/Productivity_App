@@ -12,10 +12,7 @@ export interface User {
   luck: number;
   current_health: number;
   max_health: number;
-  current_energy: number;
-  max_energy: number;
   gold: number;
-  gems: number;
   theme_preference: string;
 }
 
@@ -31,9 +28,12 @@ export interface Task {
   due_date?: string;
   status: 'active' | 'completed' | 'failed' | 'archived';
   priority: number;
-  energy_cost: number;
   created_at: string;
   completed_at?: string;
+  task_type: 'standard' | 'goal';
+  goal_target?: number;
+  goal_current?: number;
+  goal_unit?: string;
 }
 
 export interface CreateTaskRequest {
@@ -43,6 +43,9 @@ export interface CreateTaskRequest {
   difficulty?: number;
   due_date?: string;
   priority?: number;
+  task_type?: 'standard' | 'goal';
+  goal_target?: number;
+  goal_unit?: string;
 }
 
 export interface Achievement {
@@ -95,21 +98,22 @@ export interface GameState {
   fetchTasks: (status?: string) => Promise<void>;
   createTask: (task: CreateTaskRequest) => Promise<Task>;
   completeTask: (taskId: number) => Promise<void>;
+  updateTaskProgress: (taskId: number, progressAmount: number) => Promise<Task>;
   fetchAchievements: () => Promise<void>;
   checkAchievements: () => Promise<Achievement[]>;
 }
 
 export const DIFFICULTY_LEVELS = {
-  1: { label: 'Trivial', color: 'text-gray-400', xp: '10-15', energy: 5 },
-  2: { label: 'Very Easy', color: 'text-green-400', xp: '15-20', energy: 8 },
-  3: { label: 'Easy', color: 'text-green-500', xp: '20-25', energy: 12 },
-  4: { label: 'Medium-Easy', color: 'text-yellow-400', xp: '25-30', energy: 15 },
-  5: { label: 'Medium', color: 'text-yellow-500', xp: '30-35', energy: 20 },
-  6: { label: 'Medium-Hard', color: 'text-orange-400', xp: '35-40', energy: 25 },
-  7: { label: 'Hard', color: 'text-orange-500', xp: '40-45', energy: 30 },
-  8: { label: 'Very Hard', color: 'text-red-400', xp: '45-50', energy: 35 },
-  9: { label: 'Extreme', color: 'text-red-500', xp: '50-55', energy: 40 },
-  10: { label: 'Legendary', color: 'text-purple-500', xp: '55+', energy: 50 },
+  1: { label: 'Trivial', color: 'text-gray-400', xp: '10-15' },
+  2: { label: 'Very Easy', color: 'text-green-400', xp: '15-20' },
+  3: { label: 'Easy', color: 'text-green-500', xp: '20-25' },
+  4: { label: 'Medium-Easy', color: 'text-yellow-400', xp: '25-30' },
+  5: { label: 'Medium', color: 'text-yellow-500', xp: '30-35' },
+  6: { label: 'Medium-Hard', color: 'text-orange-400', xp: '35-40' },
+  7: { label: 'Hard', color: 'text-orange-500', xp: '40-45' },
+  8: { label: 'Very Hard', color: 'text-red-400', xp: '45-50' },
+  9: { label: 'Extreme', color: 'text-red-500', xp: '50-55' },
+  10: { label: 'Legendary', color: 'text-purple-500', xp: '55+' },
 } as const;
 
 export const RARITY_COLORS = {

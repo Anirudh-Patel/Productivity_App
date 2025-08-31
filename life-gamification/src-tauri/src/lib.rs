@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use std::sync::Mutex;
 
 // Global state for user and tasks
 static USER_STATE: Mutex<Option<User>> = Mutex::new(None);
 static TASKS_STATE: Mutex<Vec<Task>> = Mutex::new(Vec::new());
-static TASK_COUNTER: Mutex<i64> = Mutex::new(3); // Starting after initial tasks
+static TASK_COUNTER: Mutex<i64> = Mutex::new(4); // Starting after initial tasks
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -21,10 +20,7 @@ pub struct User {
     pub luck: i64,
     pub current_health: i64,
     pub max_health: i64,
-    pub current_energy: i64,
-    pub max_energy: i64,
     pub gold: i64,
-    pub gems: i64,
     pub theme_preference: String,
 }
 
@@ -41,9 +37,12 @@ pub struct Task {
     pub due_date: Option<String>,
     pub status: String,
     pub priority: i64,
-    pub energy_cost: i64,
     pub created_at: String,
     pub completed_at: Option<String>,
+    pub task_type: String,  // "standard" or "goal"
+    pub goal_target: Option<i64>,
+    pub goal_current: Option<i64>,
+    pub goal_unit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +53,9 @@ pub struct CreateTaskRequest {
     pub difficulty: Option<i64>,
     pub due_date: Option<String>,
     pub priority: Option<i64>,
+    pub task_type: Option<String>,
+    pub goal_target: Option<i64>,
+    pub goal_unit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,10 +112,7 @@ fn initialize_default_data() {
             luck: 8,
             current_health: 85,
             max_health: 100,
-            current_energy: 65,
-            max_energy: 100,
             gold: 250,
-            gems: 5,
             theme_preference: "solo_leveling".to_string(),
         });
     }
@@ -134,9 +133,12 @@ fn initialize_default_data() {
                 due_date: None,
                 status: "active".to_string(),
                 priority: 2,
-                energy_cost: 15,
                 created_at: "2025-08-28T08:00:00Z".to_string(),
                 completed_at: None,
+                task_type: "standard".to_string(),
+                goal_target: None,
+                goal_current: None,
+                goal_unit: None,
             },
             Task {
                 id: 2,
@@ -150,9 +152,31 @@ fn initialize_default_data() {
                 due_date: None,
                 status: "active".to_string(),
                 priority: 1,
-                energy_cost: 10,
                 created_at: "2025-08-28T09:00:00Z".to_string(),
                 completed_at: None,
+                task_type: "standard".to_string(),
+                goal_target: None,
+                goal_current: None,
+                goal_unit: None,
+            },
+            Task {
+                id: 3,
+                user_id: 1,
+                title: "Daily Steps Goal".to_string(),
+                description: Some("Walk 10,000 steps today".to_string()),
+                category: "fitness".to_string(),
+                difficulty: 4,
+                base_experience_reward: 30,
+                gold_reward: 8,
+                due_date: None,
+                status: "active".to_string(),
+                priority: 2,
+                created_at: "2025-08-28T10:00:00Z".to_string(),
+                completed_at: None,
+                task_type: "goal".to_string(),
+                goal_target: Some(10000),
+                goal_current: Some(2500),
+                goal_unit: Some("steps".to_string()),
             },
         ]);
     }
@@ -192,11 +216,11 @@ async fn create_task(task_data: CreateTaskRequest) -> Result<Task, String> {
     let difficulty = task_data.difficulty.unwrap_or(5);
     let category = task_data.category.unwrap_or_else(|| "general".to_string());
     let priority = task_data.priority.unwrap_or(3);
+    let task_type = task_data.task_type.unwrap_or_else(|| "standard".to_string());
     
     // Calculate rewards based on difficulty
     let base_xp = 10 + (difficulty - 1) * 5;
     let gold_reward = 1 + (difficulty - 1);
-    let energy_cost = 5 + (difficulty - 1) * 5;
     
     // Generate new task ID
     let mut counter = TASK_COUNTER.lock().unwrap();
@@ -216,9 +240,12 @@ async fn create_task(task_data: CreateTaskRequest) -> Result<Task, String> {
         due_date: task_data.due_date,
         status: "active".to_string(),
         priority,
-        energy_cost,
         created_at: "2025-08-28T10:00:00Z".to_string(),
         completed_at: None,
+        task_type,
+        goal_target: task_data.goal_target,
+        goal_current: if task_data.goal_target.is_some() { Some(0) } else { None },
+        goal_unit: task_data.goal_unit,
     };
     
     // Add to global state
@@ -262,12 +289,69 @@ async fn complete_task(task_id: i64) -> Result<Task, String> {
         user.level = new_level;
         user.experience_to_next_level = xp_to_next;
         
-        // Level up bonus - restore health and energy
+        // Level up bonus - restore health
         if level_up {
             user.current_health = user.max_health;
-            user.current_energy = user.max_energy;
         }
     }
+    
+    Ok(task)
+}
+
+#[tauri::command]
+async fn update_task_progress(task_id: i64, progress_amount: i64) -> Result<Task, String> {
+    initialize_default_data();
+    
+    // Find and update the task
+    let mut tasks_guard = TASKS_STATE.lock().unwrap();
+    let task_index = tasks_guard.iter().position(|t| t.id == task_id)
+        .ok_or("Task not found".to_string())?;
+        
+    let mut task = tasks_guard[task_index].clone();
+    
+    // Only update if it's a goal task and not completed
+    if task.task_type != "goal" {
+        return Err("Task is not a goal-based task".to_string());
+    }
+    
+    if task.status == "completed" {
+        return Ok(task);
+    }
+    
+    // Update progress
+    let current = task.goal_current.unwrap_or(0);
+    let new_current = current + progress_amount;
+    task.goal_current = Some(new_current);
+    
+    // Check if goal is reached
+    if let Some(target) = task.goal_target {
+        if new_current >= target {
+            // Mark as completed
+            task.status = "completed".to_string();
+            task.completed_at = Some("2025-08-28T10:00:00Z".to_string());
+            
+            // Award XP and gold to user
+            let mut user_guard = USER_STATE.lock().unwrap();
+            if let Some(ref mut user) = user_guard.as_mut() {
+                user.experience_points += task.base_experience_reward;
+                user.gold += task.gold_reward;
+                
+                // Recalculate level and XP to next level
+                let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
+                let level_up = new_level > user.level;
+                user.level = new_level;
+                user.experience_to_next_level = xp_to_next;
+                
+                // Level up bonus - restore health
+                if level_up {
+                    user.current_health = user.max_health;
+                }
+            }
+        }
+    }
+    
+    tasks_guard[task_index] = task.clone();
+    drop(tasks_guard);
     
     Ok(task)
 }
@@ -292,6 +376,7 @@ pub fn run() {
             get_tasks,
             create_task,
             complete_task,
+            update_task_progress,
             get_user_achievements,
             check_achievements
         ])
