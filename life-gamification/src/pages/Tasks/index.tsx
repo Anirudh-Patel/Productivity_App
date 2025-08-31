@@ -10,17 +10,28 @@ import { SkeletonCard } from '../../shared/components/ui/Skeleton';
 import { ButtonLoader } from '../../shared/components/ui/LoadingSpinner';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { FadeIn, StaggeredList, AnimatedProgressBar } from '../../shared/components/ui/AnimatedComponents';
+import { useToast } from '../../shared/components/ui/Toast';
+import { logger, logUserAction } from '../../utils/logger';
+import { useRenderPerformance, PerformanceMonitor, useDebounce } from '../../utils/performance';
 
 const Tasks = () => {
+  // Performance monitoring
+  useRenderPerformance('Tasks', process.env.NODE_ENV === 'development');
+  
   const { tasks, fetchTasks, completeTask } = useGameStore();
   const [searchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === 'true');
+  const toast = useToast();
   const [progressModal, setProgressModal] = useState<{ isOpen: boolean; task: Task | null }>({ 
     isOpen: false, 
     task: null 
   });
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>('active');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Debounce search term to improve performance
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
     fetchTasks();
@@ -47,16 +58,43 @@ const Tasks = () => {
 
   const handleCompleteTask = async (taskId: number) => {
     setLoadingTaskId(taskId);
-    try {
-      await completeTask(taskId);
-    } catch (error) {
-      console.error('Failed to complete task:', error);
-    } finally {
-      setLoadingTaskId(null);
-    }
+    logUserAction('completeTask', { taskId }, 'Tasks');
+    
+    // Measure task completion performance
+    const result = await PerformanceMonitor.measureAsync(
+      `completeTask_${taskId}`,
+      async () => {
+        try {
+          await completeTask(taskId);
+          toast.success('Quest completed!', 'XP and gold have been awarded.');
+          logger.info('Task completed successfully', { taskId }, 'Tasks');
+        } catch (error: any) {
+          logger.error('Failed to complete task', { error: error.message, taskId }, 'Tasks');
+          toast.error('Failed to complete quest', error.userMessage || 'Please try again.');
+          throw error;
+        }
+      },
+      200 // Log if operation takes longer than 200ms
+    );
+    
+    setLoadingTaskId(null);
   };
 
-  const filteredTasks = filter === 'completed' ? tasks.completed : tasks.active;
+  // Filter and search tasks with performance consideration
+  const filteredTasks = (() => {
+    let taskList = filter === 'completed' ? tasks.completed : tasks.active;
+    
+    // Apply search filter if search term exists
+    if (debouncedSearchTerm.trim()) {
+      taskList = taskList.filter(task => 
+        task.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        task.description?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        task.category.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      );
+    }
+    
+    return taskList;
+  })();
 
   return (
     <div className="space-y-6">
@@ -82,6 +120,8 @@ const Tasks = () => {
           <input
             type="text"
             placeholder="Search quests..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-solo-primary border border-gray-800 rounded-lg focus:outline-none focus:border-solo-accent"
           />
         </div>
@@ -171,6 +211,9 @@ interface TaskCardProps {
 }
 
 const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: TaskCardProps) => {
+  // Performance monitoring for individual task cards
+  useRenderPerformance(`TaskCard_${task.id}`, process.env.NODE_ENV === 'development');
+  
   const difficultyInfo = DIFFICULTY_LEVELS[task.difficulty as keyof typeof DIFFICULTY_LEVELS];
   
   return (

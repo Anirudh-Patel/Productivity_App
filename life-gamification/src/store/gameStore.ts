@@ -9,6 +9,9 @@ import type {
   Achievement,
   Streak 
 } from '../types';
+import { logger, logUserAction, logPerformance } from '../utils/logger';
+import { withErrorHandling } from '../utils/errorHandler';
+import { PerformanceMonitor } from '../utils/performance';
 
 export const useGameStore = create<GameState>((set, get) => ({
   user: null,
@@ -25,11 +28,24 @@ export const useGameStore = create<GameState>((set, get) => ({
   streak: null,
 
   fetchUser: async () => {
-    try {
-      const user: User = await invoke('get_user');
-      set({ user });
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
+    const startTime = Date.now();
+    
+    const result = await withErrorHandling(
+      () => invoke('get_user'),
+      { component: 'GameStore', action: 'fetchUser' }
+    );
+    
+    const duration = Date.now() - startTime;
+    logPerformance('fetchUser', duration, 'GameStore');
+    
+    if (result.error) {
+      logger.error('Failed to fetch user', result.error, 'GameStore', 'fetchUser');
+      throw result.error;
+    }
+    
+    if (result.data) {
+      set({ user: result.data });
+      logger.debug('User fetched successfully', { userId: result.data.id }, 'GameStore');
     }
   },
 
@@ -38,79 +54,98 @@ export const useGameStore = create<GameState>((set, get) => ({
       tasks: { ...state.tasks, loading: true }
     }));
 
-    try {
-      const tasks: Task[] = await invoke('get_tasks', { status });
-      
-      if (status === 'completed') {
-        set(state => ({
-          tasks: { ...state.tasks, completed: tasks, loading: false }
-        }));
-      } else if (status === 'active') {
-        set(state => ({
-          tasks: { ...state.tasks, active: tasks, loading: false }
-        }));
-      } else {
-        // No status filter - separate active and completed
-        const activeTasks = tasks.filter(t => t.status === 'active');
-        const completedTasks = tasks.filter(t => t.status === 'completed');
-        
-        set(state => ({
-          tasks: { 
-            active: activeTasks,
-            completed: completedTasks,
-            loading: false 
+    await PerformanceMonitor.measureAsync(
+      `fetchTasks${status ? `_${status}` : ''}`,
+      async () => {
+        try {
+          const tasks: Task[] = await invoke('get_tasks', { status });
+          
+          if (status === 'completed') {
+            set(state => ({
+              tasks: { ...state.tasks, completed: tasks, loading: false }
+            }));
+          } else if (status === 'active') {
+            set(state => ({
+              tasks: { ...state.tasks, active: tasks, loading: false }
+            }));
+          } else {
+            // No status filter - separate active and completed
+            const activeTasks = tasks.filter(t => t.status === 'active');
+            const completedTasks = tasks.filter(t => t.status === 'completed');
+            
+            set(() => ({
+              tasks: { 
+                active: activeTasks,
+                completed: completedTasks,
+                loading: false 
+              }
+            }));
           }
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to fetch tasks:', error);
-      set(state => ({
-        tasks: { ...state.tasks, loading: false }
-      }));
-    }
+        } catch (error) {
+          console.error('Failed to fetch tasks:', error);
+          set(state => ({
+            tasks: { ...state.tasks, loading: false }
+          }));
+          throw error;
+        }
+      },
+      500 // Log if fetch takes longer than 500ms
+    );
   },
 
   createTask: async (taskData: CreateTaskRequest): Promise<Task> => {
-    try {
-      const newTask: Task = await invoke('create_task', { taskData });
-      
-      // Add to active tasks
-      set(state => ({
-        tasks: {
-          ...state.tasks,
-          active: [newTask, ...state.tasks.active]
-        }
-      }));
+    return await PerformanceMonitor.measureAsync(
+      'createTask',
+      async () => {
+        try {
+          const newTask: Task = await invoke('create_task', { taskData });
+          
+          // Add to active tasks
+          set(state => ({
+            tasks: {
+              ...state.tasks,
+              active: [newTask, ...state.tasks.active]
+            }
+          }));
 
-      return newTask;
-    } catch (error) {
-      console.error('Failed to create task:', error);
-      throw error;
-    }
+          return newTask;
+        } catch (error) {
+          console.error('Failed to create task:', error);
+          throw error;
+        }
+      },
+      300 // Log if creation takes longer than 300ms
+    );
   },
 
   completeTask: async (taskId: number) => {
-    try {
-      const completedTask: Task = await invoke('complete_task', { taskId });
-      
-      set(state => ({
-        tasks: {
-          ...state.tasks,
-          active: state.tasks.active.filter(t => t.id !== taskId),
-          completed: [completedTask, ...state.tasks.completed]
-        }
-      }));
+    await PerformanceMonitor.measureAsync(
+      `completeTask_store_${taskId}`,
+      async () => {
+        try {
+          const completedTask: Task = await invoke('complete_task', { taskId });
+          
+          set(state => ({
+            tasks: {
+              ...state.tasks,
+              active: state.tasks.active.filter(t => t.id !== taskId),
+              completed: [completedTask, ...state.tasks.completed]
+            }
+          }));
 
-      // Refresh user data to get updated XP/gold
-      get().fetchUser();
-      
-      // Check for new achievements
-      get().checkAchievements();
-      
-    } catch (error) {
-      console.error('Failed to complete task:', error);
-      throw error;
-    }
+          // Refresh user data to get updated XP/gold
+          get().fetchUser();
+          
+          // Check for new achievements
+          get().checkAchievements();
+          
+        } catch (error) {
+          console.error('Failed to complete task:', error);
+          throw error;
+        }
+      },
+      400 // Log if completion takes longer than 400ms
+    );
   },
 
   updateTaskProgress: async (taskId: number, progressAmount: number) => {

@@ -1,6 +1,9 @@
 import { Calendar, Target, TrendingUp, Award } from 'lucide-react'
+import { useRenderPerformance } from '../../utils/performance'
 
 const Dashboard = () => {
+  // Performance monitoring
+  useRenderPerformance('Dashboard', process.env.NODE_ENV === 'development');
   return (
     <div className="space-y-6">
       <div>
