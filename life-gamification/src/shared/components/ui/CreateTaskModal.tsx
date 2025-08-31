@@ -3,6 +3,7 @@ import { X, Sword, Zap } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { DIFFICULTY_LEVELS } from '../../../types';
 import type { CreateTaskRequest } from '../../../types';
+import { ButtonLoader } from './LoadingSpinner';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -257,8 +258,9 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
             <button
               type="submit"
               disabled={loading || !formData.title.trim()}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-solo-accent to-solo-secondary text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-solo-accent to-solo-secondary text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center"
             >
+              {loading && <ButtonLoader />}
               {loading ? 'Creating...' : 'Create Quest'}
             </button>
           </div>

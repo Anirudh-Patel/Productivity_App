@@ -1,29 +1,58 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
 import { DIFFICULTY_LEVELS } from '../../types';
 import type { Task } from '../../types';
 import CreateTaskModal from '../../shared/components/ui/CreateTaskModal';
 import UpdateProgressModal from '../../shared/components/ui/UpdateProgressModal';
+import { SkeletonCard } from '../../shared/components/ui/Skeleton';
+import { ButtonLoader } from '../../shared/components/ui/LoadingSpinner';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { FadeIn, StaggeredList, AnimatedProgressBar } from '../../shared/components/ui/AnimatedComponents';
 
 const Tasks = () => {
   const { tasks, fetchTasks, completeTask } = useGameStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === 'true');
   const [progressModal, setProgressModal] = useState<{ isOpen: boolean; task: Task | null }>({ 
     isOpen: false, 
     task: null 
   });
+  const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>('active');
 
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 
+  // Task-specific keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      action: () => setIsModalOpen(true),
+      description: 'Create new quest',
+      category: 'Actions'
+    },
+    {
+      key: 'Escape',
+      action: () => {
+        setIsModalOpen(false);
+        setProgressModal({ isOpen: false, task: null });
+      },
+      description: 'Close modals',
+      category: 'Interface'
+    }
+  ]);
+
   const handleCompleteTask = async (taskId: number) => {
+    setLoadingTaskId(taskId);
     try {
       await completeTask(taskId);
     } catch (error) {
       console.error('Failed to complete task:', error);
+    } finally {
+      setLoadingTaskId(null);
     }
   };
 
@@ -38,9 +67,11 @@ const Tasks = () => {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-solo-accent to-solo-secondary text-white rounded-lg hover:opacity-90 transition-opacity">
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-solo-accent to-solo-secondary text-white rounded-lg hover:opacity-90 hover:scale-105 transition-all duration-200 hover:shadow-lg hover:shadow-solo-accent/25"
+          title="Create new quest (Ctrl+N or N)">
           <Plus className="w-5 h-5" />
           <span>New Quest</span>
+          <kbd className="hidden md:inline-block ml-2 px-1.5 py-0.5 text-xs font-mono bg-white/20 rounded">N</kbd>
         </button>
       </div>
 
@@ -80,33 +111,39 @@ const Tasks = () => {
       {/* Tasks List */}
       <div className="space-y-4">
         {tasks.loading ? (
-          <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
-            <div className="text-center py-12 text-gray-400">
-              <div className="animate-spin w-8 h-8 border-2 border-solo-accent border-t-transparent rounded-full mx-auto mb-3" />
-              <p>Loading quests...</p>
+          <FadeIn direction="up">
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
-          </div>
+          </FadeIn>
         ) : filteredTasks.length === 0 ? (
-          <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
-            <div className="text-center py-12 text-gray-400">
-              <CheckSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No {filter} quests</p>
-              <p className="text-sm mt-2">
-                {filter === 'active' 
-                  ? 'Create your first quest to begin your journey!' 
-                  : 'Complete some quests to see them here!'}
-              </p>
+          <FadeIn direction="up" delay={200}>
+            <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
+              <div className="text-center py-12 text-gray-400">
+                <CheckSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No {filter} quests</p>
+                <p className="text-sm mt-2">
+                  {filter === 'active' 
+                    ? 'Create your first quest to begin your journey!' 
+                    : 'Complete some quests to see them here!'}
+                </p>
+              </div>
             </div>
-          </div>
+          </FadeIn>
         ) : (
-          filteredTasks.map((task) => (
-            <TaskCard 
-              key={task.id} 
-              task={task} 
-              onComplete={() => handleCompleteTask(task.id)}
-              onUpdateProgress={() => setProgressModal({ isOpen: true, task })} 
-            />
-          ))
+          <StaggeredList delay={100}>
+            {filteredTasks.map((task) => (
+              <TaskCard 
+                key={task.id} 
+                task={task} 
+                onComplete={() => handleCompleteTask(task.id)}
+                onUpdateProgress={() => setProgressModal({ isOpen: true, task })}
+                isLoading={loadingTaskId === task.id} 
+              />
+            ))}
+          </StaggeredList>
         )}
       </div>
 
@@ -130,13 +167,14 @@ interface TaskCardProps {
   task: Task;
   onComplete: () => void;
   onUpdateProgress: () => void;
+  isLoading?: boolean;
 }
 
-const TaskCard = ({ task, onComplete, onUpdateProgress }: TaskCardProps) => {
+const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: TaskCardProps) => {
   const difficultyInfo = DIFFICULTY_LEVELS[task.difficulty as keyof typeof DIFFICULTY_LEVELS];
   
   return (
-    <div className="bg-solo-primary rounded-lg border border-gray-800 p-4 hover:border-gray-700 transition-colors">
+    <div className="bg-solo-primary rounded-lg border border-gray-800 p-4 hover:border-gray-700 hover:shadow-lg hover:shadow-solo-accent/10 transition-all duration-300 hover:-translate-y-1">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -159,14 +197,10 @@ const TaskCard = ({ task, onComplete, onUpdateProgress }: TaskCardProps) => {
                   {task.goal_current || 0} / {task.goal_target} {task.goal_unit || 'units'}
                 </span>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-solo-accent to-solo-secondary transition-all duration-500"
-                  style={{ 
-                    width: `${Math.min(100, ((task.goal_current || 0) / task.goal_target) * 100)}%` 
-                  }}
-                />
-              </div>
+              <AnimatedProgressBar
+                progress={((task.goal_current || 0) / task.goal_target) * 100}
+                duration={800}
+              />
               <div className="text-xs text-gray-400 mt-1 text-right">
                 {Math.min(100, ((task.goal_current || 0) / task.goal_target) * 100).toFixed(1)}% Complete
               </div>
@@ -210,9 +244,11 @@ const TaskCard = ({ task, onComplete, onUpdateProgress }: TaskCardProps) => {
             ) : (
               <button
                 onClick={onComplete}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                disabled={isLoading}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                Complete
+                {isLoading && <ButtonLoader />}
+                {isLoading ? 'Completing...' : 'Complete'}
               </button>
             )}
           </div>

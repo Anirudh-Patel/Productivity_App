@@ -1,7 +1,11 @@
-import { Bell, Zap, Coins } from 'lucide-react'
+import { Bell, Zap, Coins, Menu } from 'lucide-react'
 import { useGameStore } from '../../../store/gameStore'
 
-const Header = () => {
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+}
+
+const Header = ({ onToggleSidebar }: HeaderProps) => {
   const { user } = useGameStore();
 
   const gold = user?.gold || 0;
@@ -9,6 +13,15 @@ const Header = () => {
   return (
     <header className="h-16 bg-solo-primary border-b border-gray-800 px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 hover:bg-solo-bg rounded-lg transition-colors md:hidden"
+            title="Toggle sidebar (Ctrl + \)"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
         <h2 className="text-xl font-semibold">Welcome back, Adventurer!</h2>
       </div>
 

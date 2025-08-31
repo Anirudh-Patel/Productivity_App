@@ -10,6 +10,8 @@ import {
   Trophy
 } from 'lucide-react'
 import { useGameStore } from '../../../store/gameStore'
+import { SkeletonProgressBar, SkeletonText } from '../../components/ui/Skeleton'
+import { AnimatedProgressBar } from '../../components/ui/AnimatedComponents'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: Home },
@@ -19,7 +21,11 @@ const navItems = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const Sidebar = () => {
+interface SidebarProps {
+  collapsed?: boolean;
+}
+
+const Sidebar = ({ collapsed = false }: SidebarProps) => {
   const { user, fetchUser } = useGameStore();
 
   useEffect(() => {
@@ -36,55 +42,74 @@ const Sidebar = () => {
   const hpPercent = Math.max(0, Math.min(100, (currentHP / maxHP) * 100));
 
   return (
-    <aside className="w-64 bg-solo-primary border-r border-gray-800">
-      <div className="p-6">
-        <div className="flex items-center gap-3 mb-8">
+    <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-solo-primary border-r border-gray-800 transition-all duration-300`}>
+      <div className={`${collapsed ? 'p-4' : 'p-6'}`}>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} mb-8`}>
           <Swords className="w-8 h-8 text-solo-accent" />
-          <h1 className="text-xl font-bold bg-gradient-to-r from-solo-accent to-solo-secondary bg-clip-text text-transparent">
-            Life Quest
-          </h1>
+          {!collapsed && (
+            <h1 className="text-xl font-bold bg-gradient-to-r from-solo-accent to-solo-secondary bg-clip-text text-transparent">
+              Life Quest
+            </h1>
+          )}
         </div>
 
         {/* User Status */}
+        {!collapsed && (
         <div className="mb-8 p-4 bg-solo-bg rounded-lg border border-gray-800">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-solo-accent to-solo-secondary flex items-center justify-center">
-              <Trophy className="w-6 h-6" />
+          {!user ? (
+            // Loading skeleton
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gray-800 animate-pulse" />
+                <div className="space-y-1">
+                  <SkeletonText lines={1} className="w-16" />
+                  <SkeletonText lines={1} className="w-8" />
+                </div>
+              </div>
+              <SkeletonProgressBar />
+              <SkeletonProgressBar />
             </div>
-            <div>
-              <p className="text-sm text-gray-400">Level</p>
-              <p className="text-lg font-bold">{userLevel}</p>
-            </div>
-          </div>
-          
-          {/* XP Bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>XP</span>
-              <span>{currentXP} / {currentXP + xpToNext}</span>
-            </div>
-            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-solo-accent to-solo-secondary transition-all duration-500"
-                style={{ width: `${xpPercent}%` }}
-              />
-            </div>
-          </div>
+          ) : (
+            // Actual content
+            <>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-solo-accent to-solo-secondary flex items-center justify-center">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">Level</p>
+                  <p className="text-lg font-bold">{userLevel}</p>
+                </div>
+              </div>
+              
+              {/* XP Bar */}
+              <div className="mt-3">
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>XP</span>
+                  <span>{currentXP} / {currentXP + xpToNext}</span>
+                </div>
+                <AnimatedProgressBar
+                  progress={xpPercent}
+                  duration={1000}
+                />
+              </div>
 
-          {/* Health Bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>HP</span>
-              <span>{currentHP} / {maxHP}</span>
-            </div>
-            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500"
-                style={{ width: `${hpPercent}%` }}
-              />
-            </div>
-          </div>
+              {/* Health Bar */}
+              <div className="mt-3">
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>HP</span>
+                  <span>{currentHP} / {maxHP}</span>
+                </div>
+                <AnimatedProgressBar
+                  progress={hpPercent}
+                  color="bg-gradient-to-r from-red-500 to-red-400"
+                  duration={800}
+                />
+              </div>
+            </>
+          )}
         </div>
+        )}
 
         {/* Navigation */}
         <nav className="space-y-2">
@@ -92,16 +117,17 @@ const Sidebar = () => {
             <NavLink
               key={path}
               to={path}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                `flex items-center ${collapsed ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-lg transition-all duration-200 hover:scale-105 ${
                   isActive
-                    ? 'bg-solo-accent/20 text-solo-accent'
-                    : 'hover:bg-solo-bg text-gray-400 hover:text-solo-text'
+                    ? 'bg-solo-accent/20 text-solo-accent shadow-lg shadow-solo-accent/25'
+                    : 'hover:bg-solo-bg text-gray-400 hover:text-solo-text hover:shadow-md'
                 }`
               }
             >
               <Icon className="w-5 h-5" />
-              <span>{label}</span>
+              {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}
         </nav>

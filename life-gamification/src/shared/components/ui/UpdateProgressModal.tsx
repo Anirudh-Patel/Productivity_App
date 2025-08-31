@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, TrendingUp } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import type { Task } from '../../../types';
+import { ButtonLoader } from './LoadingSpinner';
 
 interface UpdateProgressModalProps {
   isOpen: boolean;
@@ -131,8 +132,9 @@ const UpdateProgressModal = ({ isOpen, onClose, task }: UpdateProgressModalProps
             <button
             type="submit"
             disabled={loading || progressAmount <= 0}
-            className="w-full py-3 bg-gradient-to-r from-solo-accent to-solo-secondary rounded-lg font-semibold hover:shadow-lg hover:shadow-solo-accent/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-gradient-to-r from-solo-accent to-solo-secondary rounded-lg font-semibold hover:shadow-lg hover:shadow-solo-accent/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
+            {loading && <ButtonLoader />}
             {loading ? 'Updating...' : 'Update Progress'}
           </button>
           </div>
