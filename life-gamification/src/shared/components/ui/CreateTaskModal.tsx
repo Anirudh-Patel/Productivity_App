@@ -53,8 +53,8 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-solo-primary border border-gray-800 rounded-lg w-full max-w-md mx-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-solo-primary border border-gray-800 rounded-lg w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-800">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Sword className="w-6 h-6 text-solo-accent" />
@@ -68,7 +68,8 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Title */}
           <div>
             <label htmlFor="title" className="block text-sm font-medium mb-2">
@@ -242,9 +243,10 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
               <span>Critical</span>
             </div>
           </div>
+          </div>
 
-          {/* Buttons */}
-          <div className="flex gap-3 pt-4">
+          {/* Buttons - Fixed at bottom */}
+          <div className="flex gap-3 p-6 border-t border-gray-800 bg-solo-primary">
             <button
               type="button"
               onClick={onClose}

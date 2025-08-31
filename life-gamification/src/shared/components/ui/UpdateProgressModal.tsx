@@ -37,8 +37,8 @@ const UpdateProgressModal = ({ isOpen, onClose, task }: UpdateProgressModalProps
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-solo-primary border border-gray-800 rounded-lg w-full max-w-md mx-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-solo-primary border border-gray-800 rounded-lg w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-800">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <TrendingUp className="w-6 h-6 text-solo-accent" />
@@ -53,7 +53,8 @@ const UpdateProgressModal = ({ isOpen, onClose, task }: UpdateProgressModalProps
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Task Info */}
           <div className="p-3 bg-solo-bg rounded-lg border border-gray-700">
             <div className="text-sm font-medium mb-2">{task.title}</div>
@@ -123,15 +124,18 @@ const UpdateProgressModal = ({ isOpen, onClose, task }: UpdateProgressModalProps
               ))}
             </div>
           </div>
+          </div>
 
-          {/* Submit Button */}
-          <button
+          {/* Submit Button - Fixed at bottom */}
+          <div className="p-6 border-t border-gray-800 bg-solo-primary">
+            <button
             type="submit"
             disabled={loading || progressAmount <= 0}
             className="w-full py-3 bg-gradient-to-r from-solo-accent to-solo-secondary rounded-lg font-semibold hover:shadow-lg hover:shadow-solo-accent/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Updating...' : 'Update Progress'}
           </button>
+          </div>
         </form>
       </div>
     </div>
