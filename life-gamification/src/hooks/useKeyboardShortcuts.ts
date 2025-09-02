@@ -81,7 +81,7 @@ export const useGlobalShortcuts = (callbacks: {
       description: 'Show keyboard shortcuts',
       category: 'Help'
     }
-  ].filter(shortcut => shortcut.action !== (() => {}));
+  ].filter(shortcut => shortcut.action.toString() !== '() => {}');
 
   useKeyboardShortcuts(shortcuts);
   return shortcuts;
