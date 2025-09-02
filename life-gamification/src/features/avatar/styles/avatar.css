@@ -1,0 +1,32 @@
+.pixelated {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+}
+
+.avatar-container {
+  position: relative;
+}
+
+.avatar-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Rarity border colors */
+.border-common { border-color: #808080; }
+.border-uncommon { border-color: #1EFF00; }
+.border-rare { border-color: #0070DD; }
+.border-epic { border-color: #A335EE; }
+.border-legendary { 
+  border-color: #FF8000;
+  animation: legendary-glow 2s ease-in-out infinite;
+}
+
+@keyframes legendary-glow {
+  0%, 100% { box-shadow: 0 0 5px #FF8000; }
+  50% { box-shadow: 0 0 20px #FF8000, 0 0 30px #FF8000; }
+}
