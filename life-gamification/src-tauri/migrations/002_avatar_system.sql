@@ -3,7 +3,7 @@
 CREATE TABLE equipment_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    slot TEXT NOT NULL CHECK (slot IN ('head', 'chest', 'legs', 'weapon', 'accessory')),
+    slot TEXT NOT NULL CHECK (slot IN ('head', 'chest', 'legs', 'weapon', 'accessory', 'background')),
     rarity TEXT NOT NULL CHECK (rarity IN ('common', 'uncommon', 'rare', 'epic', 'legendary')),
     base_stats JSON DEFAULT '{}',
     sprite_data JSON DEFAULT '{}', -- Will store sprite sheet coordinates

@@ -1,22 +1,8 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { generateMockInventory, generateStarterEquipment, type Equipment } from '../../features/avatar/utils/mockData';
 
-interface Equipment {
-  id: number;
-  name: string;
-  slot: 'head' | 'chest' | 'legs' | 'weapon' | 'accessory' | 'background';
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-  spriteData: {
-    color: string;
-    glow?: boolean;
-    backgroundType?: 'solid' | 'gradient' | 'image' | 'animated';
-    backgroundData?: {
-      colors?: string[];
-      imageUrl?: string;
-      animationFrames?: string[];
-    };
-  };
-}
+// Equipment interface imported from mockData
 
 interface AvatarState {
   equipped: {
@@ -112,14 +98,14 @@ export const useAvatarStore = create<AvatarState>((set, get) => ({
       // Equip first item of each slot type, put rest in inventory
       Object.entries(equipmentBySlot).forEach(([slot, items]) => {
         if (items.length > 0 && slot in equipped) {
-          equipped[slot as keyof typeof equipped] = items[0];
+          (equipped as any)[slot] = items[0];
           // Add remaining items to inventory
           inventory.push(...items.slice(1));
         }
       });
 
       // Add test background for now
-      equipped.background = {
+      (equipped as any).background = {
         id: 999,
         name: 'Test Background',
         slot: 'background' as const,
@@ -154,7 +140,30 @@ export const useAvatarStore = create<AvatarState>((set, get) => ({
         }
       });
     } catch (error) {
-      console.error('Failed to load equipment:', error);
+      console.error('Failed to load equipment from backend, using mock data:', error);
+      
+      // Fallback to mock data
+      const starterEquipment = generateStarterEquipment();
+      const equipped = {
+        head: null,
+        chest: null,
+        legs: null,
+        weapon: null,
+        accessory: null,
+        background: null,
+      };
+      
+      // Equip starter items
+      Object.entries(starterEquipment).forEach(([slot, item]) => {
+        if (slot in equipped) {
+          (equipped as any)[slot] = item;
+        }
+      });
+      
+      // Generate mock inventory
+      const inventory = generateMockInventory(20);
+      
+      set({ equipped, inventory });
     }
   },
 

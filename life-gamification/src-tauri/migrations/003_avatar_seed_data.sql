@@ -28,21 +28,29 @@ INSERT INTO equipment_types (name, slot, rarity, base_stats, sprite_data) VALUES
 ('Simple Ring', 'accessory', 'common', '{"luck": 1}', '{"color": "#C0C0C0"}'),
 ('Magic Amulet', 'accessory', 'uncommon', '{"intelligence": 2}', '{"color": "#4169E1"}'),
 ('Power Bracelet', 'accessory', 'rare', '{"strength": 3}', '{"color": "#DC143C"}'),
-('Legendary Pendant', 'accessory', 'legendary', '{"strength": 5, "intelligence": 5, "luck": 5}', '{"color": "#FFD700", "glow": true}');
+('Legendary Pendant', 'accessory', 'legendary', '{"strength": 5, "intelligence": 5, "luck": 5}', '{"color": "#FFD700", "glow": true}'),
+
+-- Background items
+('Forest Scene', 'background', 'common', '{}', '{"backgroundType": "gradient", "backgroundData": {"colors": ["#228B22", "#32CD32"]}}'),
+('Desert Sunset', 'background', 'uncommon', '{}', '{"backgroundType": "gradient", "backgroundData": {"colors": ["#FF8C00", "#FFD700"]}}'),
+('Mystic Cave', 'background', 'rare', '{}', '{"backgroundType": "gradient", "backgroundData": {"colors": ["#4B0082", "#8A2BE2"]}}'),
+('Dragon Lair', 'background', 'legendary', '{}', '{"backgroundType": "gradient", "backgroundData": {"colors": ["#8B0000", "#FF4500"]}}');
 
 -- Create default avatar config for default user
 INSERT OR IGNORE INTO avatar_configs (user_id) VALUES (1);
 
 -- Give the default user some starter equipment
 INSERT OR IGNORE INTO user_equipment (user_id, equipment_type_id, equipped_slot) VALUES
-(1, 1, 'head'),     -- Basic Cap
-(1, 5, 'chest'),    -- Cloth Shirt
-(1, 9, 'legs'),     -- Basic Pants
-(1, 13, 'weapon');  -- Wooden Stick
+(1, 1, 'head'),        -- Basic Cap
+(1, 5, 'chest'),       -- Cloth Shirt
+(1, 9, 'legs'),        -- Basic Pants
+(1, 13, 'weapon'),     -- Wooden Stick
+(1, 17, 'background'); -- Forest Scene
 
 -- Add some inventory items for the default user
 INSERT OR IGNORE INTO user_equipment (user_id, equipment_type_id) VALUES
 (1, 2),  -- Iron Helm (in inventory)
 (1, 6),  -- Leather Armor (in inventory)
 (1, 14), -- Iron Sword (in inventory)
-(1, 17); -- Simple Ring (in inventory)
+(1, 21), -- Simple Ring (in inventory)
+(1, 18); -- Desert Sunset background (in inventory)

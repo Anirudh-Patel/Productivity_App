@@ -23,7 +23,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <>
-      <div className="flex h-screen bg-solo-bg text-solo-text">
+      <div className="flex h-screen bg-theme-bg text-theme-fg">
         <Sidebar collapsed={sidebarCollapsed} />
         <div className="flex-1 flex flex-col">
           <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />

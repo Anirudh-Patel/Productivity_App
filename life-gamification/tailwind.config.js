@@ -7,7 +7,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Manhwa-inspired color palette
+        // Dynamic theme colors using CSS variables
+        'theme-bg': 'rgb(var(--background) / <alpha-value>)',
+        'theme-fg': 'rgb(var(--foreground) / <alpha-value>)',
+        'theme-primary': 'rgb(var(--primary) / <alpha-value>)',
+        'theme-secondary': 'rgb(var(--secondary) / <alpha-value>)',
+        'theme-accent': 'rgb(var(--accent) / <alpha-value>)',
+        'theme-muted': 'rgb(var(--muted) / <alpha-value>)',
+        'theme-success': 'rgb(var(--success) / <alpha-value>)',
+        'theme-warning': 'rgb(var(--warning) / <alpha-value>)',
+        'theme-error': 'rgb(var(--error) / <alpha-value>)',
+        
+        // Keep original colors for backward compatibility
         primary: {
           red: '#FF6B6B',
           teal: '#4ECDC4',
@@ -20,14 +31,14 @@ module.exports = {
           epic: '#A335EE',
           legendary: '#FF8000',
         },
-        // Solo Leveling theme
+        // Solo Leveling theme (fallback)
         solo: {
-          bg: '#0A0E1A',
-          primary: '#1E2A3A',
-          accent: '#00D4FF',
-          secondary: '#6366F1',
-          text: '#E5E7EB',
-          warning: '#EF4444',
+          bg: 'rgb(var(--background) / <alpha-value>)',
+          primary: 'rgb(var(--primary) / <alpha-value>)',
+          accent: 'rgb(var(--accent) / <alpha-value>)',
+          secondary: 'rgb(var(--secondary) / <alpha-value>)',
+          text: 'rgb(var(--foreground) / <alpha-value>)',
+          warning: 'rgb(var(--error) / <alpha-value>)',
         },
       },
       animation: {

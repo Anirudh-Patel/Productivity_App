@@ -3,10 +3,13 @@ import Layout from './shared/components/layout/Layout'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Stats from './pages/Stats'
+import Equipment from './pages/Equipment'
 import Shop from './pages/Shop'
 import Settings from './pages/Settings'
 import { ErrorBoundary } from './shared/components/ui/ErrorBoundary'
 import { ToastProvider } from './shared/components/ui/Toast'
+import { ThemeProvider } from './contexts/ThemeContext'
+import { LayoutDebugger } from './shared/components/debug/LayoutDebugger'
 import { logger } from './utils/logger'
 import { startMemoryMonitoring } from './utils/performance'
 import './App.css'
@@ -22,19 +25,23 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <HashRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tasks" element={<Tasks />} />
-              <Route path="/stats" element={<Stats />} />
-              <Route path="/shop" element={<Shop />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Layout>
-        </HashRouter>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <HashRouter>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/tasks" element={<Tasks />} />
+                <Route path="/stats" element={<Stats />} />
+                <Route path="/equipment" element={<Equipment />} />
+                <Route path="/shop" element={<Shop />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </Layout>
+          </HashRouter>
+          {process.env.NODE_ENV === 'development' && <LayoutDebugger />}
+        </ToastProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

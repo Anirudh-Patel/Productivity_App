@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAvatarStore } from '../../store/slices/avatarSlice';
 import { AvatarCanvas } from '../../features/avatar/components/AvatarCanvas/AvatarCanvas';
-import { Trash2, RotateCcw } from 'lucide-react';
+import { Trash2, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 
 interface Equipment {
   id: number;
@@ -46,8 +46,9 @@ const SLOT_NAMES = {
 };
 
 const Equipment = () => {
-  const { equipped, inventory, config, equipItem, unequipItem, loadUserEquipment } = useAvatarStore();
+  const { equipped, inventory, equipItem, unequipItem, loadUserEquipment } = useAvatarStore();
   const [selectedItem, setSelectedItem] = useState<Equipment | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     // Force load equipment to ensure avatar renders with placeholders
@@ -159,7 +160,16 @@ const Equipment = () => {
         {/* Avatar Preview */}
         <div style={{ width: '320px', flexShrink: 0 }}>
           <div className="bg-theme-primary rounded-xl p-6 border border-gray-800 h-full flex flex-col">
-            <h2 className="text-xl font-semibold mb-8 text-center">Character Preview</h2>
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-semibold">Character Preview</h2>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-gray-400 hover:text-white transition-colors"
+                title="Full Screen Preview"
+              >
+                <Maximize2 className="w-5 h-5" />
+              </button>
+            </div>
             <div className="flex justify-center flex-1">
               <div className="rounded-lg border-2 border-solo-accent/30 overflow-hidden flex items-center justify-center w-fit h-full p-0.5">
                 <div className="rounded flex items-center justify-center w-full h-full p-6" style={{
@@ -256,6 +266,52 @@ const Equipment = () => {
           </div>
         )}
       </div>
+
+      {/* Full Screen Modal */}
+      {isExpanded && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+          onClick={() => setIsExpanded(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-theme-primary rounded-xl p-8 border border-gray-800 max-w-2xl"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-3xl font-bold text-gray-200">Full Screen Character Preview</h2>
+              <button
+                onClick={() => setIsExpanded(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <Minimize2 className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex justify-center mb-6">
+              <div className="rounded-lg border-2 border-solo-accent/30 overflow-hidden flex items-center justify-center p-1">
+                <div className="rounded flex items-center justify-center" style={{
+                  background: 'linear-gradient(to bottom, #E74C3C, #8E44AD)',
+                  width: '384px',
+                  height: '480px'
+                }}>
+                  <div key={`avatar-full-${equipped.head?.id || 'none'}-${equipped.chest?.id || 'none'}`}>
+                    <AvatarCanvas width={300} height={360} zoom={3} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => setIsExpanded(false)}
+                className="px-6 py-3 bg-gradient-to-r from-solo-accent to-solo-secondary text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-solo-accent/25 transition-all"
+              >
+                Close Full Screen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

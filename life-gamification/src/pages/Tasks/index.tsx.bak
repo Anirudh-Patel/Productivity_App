@@ -13,14 +13,12 @@ import { FadeIn, StaggeredList, AnimatedProgressBar } from '../../shared/compone
 import { useToast } from '../../shared/components/ui/Toast';
 import { logger, logUserAction } from '../../utils/logger';
 import { useRenderPerformance, PerformanceMonitor, useDebounce } from '../../utils/performance';
-import { formatRecurrencePattern, getRecurringQuestIcon, isQuestDueToday } from '../../utils/recurringQuests';
-import { QuestChains } from '../../shared/components/ui/QuestChains';
 
 const Tasks = () => {
   // Performance monitoring
   useRenderPerformance('Tasks', process.env.NODE_ENV === 'development');
   
-  const { tasks, fetchTasks, completeTask, createTask, user } = useGameStore();
+  const { tasks, fetchTasks, completeTask } = useGameStore();
   const [searchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === 'true');
   const toast = useToast();
@@ -30,7 +28,6 @@ const Tasks = () => {
   });
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>('active');
-  const [activeTab, setActiveTab] = useState<'quests' | 'chains'>('quests');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Debounce search term to improve performance
@@ -64,7 +61,7 @@ const Tasks = () => {
     logUserAction('completeTask', { taskId }, 'Tasks');
     
     // Measure task completion performance
-    await PerformanceMonitor.measureAsync(
+    const result = await PerformanceMonitor.measureAsync(
       `completeTask_${taskId}`,
       async () => {
         try {
@@ -116,78 +113,34 @@ const Tasks = () => {
         </button>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setActiveTab('quests')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'quests'
-              ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/30'
-              : 'text-gray-400 hover:text-theme-fg'
-          }`}
-        >
-          Individual Quests
-        </button>
-        <button
-          onClick={() => setActiveTab('chains')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'chains'
-              ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/30'
-              : 'text-gray-400 hover:text-theme-fg'
-          }`}
-        >
-          Quest Chains
+      {/* Filters and Search */}
+      <div className="flex gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search quests..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-solo-primary border border-gray-800 rounded-lg focus:outline-none focus:border-solo-accent"
+          />
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 bg-solo-primary border border-gray-800 rounded-lg hover:bg-solo-bg transition-colors">
+          <Filter className="w-5 h-5" />
+          <span>Filter</span>
         </button>
       </div>
 
-      {activeTab === 'quests' && (
-        <>
-          {/* Filters and Search */}
-          <div className="flex gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search quests..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-primary border border-gray-800 rounded-lg focus:outline-none focus:border-theme-accent"
-              />
-            </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-theme-primary border border-gray-800 rounded-lg hover:bg-theme-bg transition-colors">
-              <Filter className="w-5 h-5" />
-              <span>Filter</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Quest Chains Tab Content */}
-      {activeTab === 'chains' && (
-        <QuestChains
-          userLevel={user?.level || 1}
-          onStartChainQuest={(questData) => {
-            // Create quest from chain template
-            createTask(questData).then(() => {
-              setActiveTab('quests'); // Switch back to quests tab
-            });
-          }}
-        />
-      )}
-
-      {/* Individual Quests Tab Content */}
-      {activeTab === 'quests' && (
-        <>
-          {/* Task Categories */}
-          <div className="flex gap-2">
-            {['active', 'completed'].map((category) => (
+      {/* Task Categories */}
+      <div className="flex gap-2">
+        {['active', 'completed'].map((category) => (
           <button
             key={category}
             onClick={() => setFilter(category)}
             className={`px-4 py-2 rounded-lg transition-colors capitalize ${
               category === filter
-                ? 'bg-solo-accent/20 text-theme-accent border border-theme-accent/30'
-                : 'bg-theme-primary text-gray-400 hover:text-theme-fg border border-gray-800'
+                ? 'bg-solo-accent/20 text-solo-accent border border-solo-accent/30'
+                : 'bg-solo-primary text-gray-400 hover:text-solo-text border border-gray-800'
             }`}
           >
             {category} ({category === 'active' ? tasks.active.length : tasks.completed.length})
@@ -207,7 +160,7 @@ const Tasks = () => {
           </FadeIn>
         ) : filteredTasks.length === 0 ? (
           <FadeIn direction="up" delay={200}>
-            <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+            <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
               <div className="text-center py-12 text-gray-400">
                 <CheckSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No {filter} quests</p>
@@ -234,10 +187,6 @@ const Tasks = () => {
         )}
       </div>
 
-        </>
-      )}
-
-      {/* Modals */}
       <CreateTaskModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -268,7 +217,7 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
   const difficultyInfo = DIFFICULTY_LEVELS[task.difficulty as keyof typeof DIFFICULTY_LEVELS];
   
   return (
-    <div className="bg-theme-primary rounded-lg border border-gray-800 p-4 hover:border-gray-700 hover:shadow-lg hover:shadow-solo-accent/10 transition-all duration-300 hover:-translate-y-1">
+    <div className="bg-solo-primary rounded-lg border border-gray-800 p-4 hover:border-gray-700 hover:shadow-lg hover:shadow-solo-accent/10 transition-all duration-300 hover:-translate-y-1">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -297,29 +246,6 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
               />
               <div className="text-xs text-gray-400 mt-1 text-right">
                 {Math.min(100, ((task.goal_current || 0) / task.goal_target) * 100).toFixed(1)}% Complete
-              </div>
-            </div>
-          )}
-
-          {/* Recurring quest info */}
-          {task.task_type === 'recurring' && task.recurrence_pattern && (
-            <div className="mb-3 p-2 bg-theme-bg rounded-lg border border-gray-700">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-lg">{getRecurringQuestIcon(task.recurrence_pattern)}</span>
-                <div className="flex-1">
-                  <div className="text-theme-accent font-medium">
-                    {formatRecurrencePattern(task.recurrence_pattern)}
-                  </div>
-                  <div className="text-gray-400">
-                    {task.current_streak ? `${task.current_streak} day streak` : 'No streak yet'}
-                    {task.total_completions ? ` • ${task.total_completions} completions` : ''}
-                  </div>
-                </div>
-                {isQuestDueToday(task) && (
-                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs font-medium">
-                    Due Today
-                  </span>
-                )}
               </div>
             </div>
           )}

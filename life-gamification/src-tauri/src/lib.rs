@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
+// Import avatar commands
+mod commands;
+use commands::avatar;
+
 // Global state for user and tasks
 static USER_STATE: Mutex<Option<User>> = Mutex::new(None);
 static TASKS_STATE: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 static TASK_COUNTER: Mutex<i64> = Mutex::new(4); // Starting after initial tasks
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -44,6 +49,7 @@ pub struct Task {
     pub goal_current: Option<i64>,
     pub goal_unit: Option<String>,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
@@ -366,6 +372,7 @@ async fn check_achievements() -> Result<Vec<Achievement>, String> {
     Ok(vec![])
 }
 
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -378,7 +385,11 @@ pub fn run() {
             complete_task,
             update_task_progress,
             get_user_achievements,
-            check_achievements
+            check_achievements,
+            avatar::get_user_equipment,
+            avatar::equip_item,
+            avatar::unequip_item,
+            avatar::get_avatar_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

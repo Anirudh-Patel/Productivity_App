@@ -1,22 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useAvatarStore } from '../../../../store/slices/avatarSlice';
-
-interface Layer {
-  zIndex: number;
-  name: string;
-  draw: (ctx: CanvasRenderingContext2D, frame: number) => void;
-}
-
-const LAYER_ORDER = {
-  BACKGROUND: 1,
-  SHADOW: 5,
-  BASE: 10,
-  LEGS: 15,
-  CHEST: 20,
-  HEAD: 25,
-  WEAPON: 30,
-  EFFECTS: 40,
-};
+import '../../styles/avatar.css';
 
 const RARITY_COLORS = {
   common: { primary: '#808080', glow: null },
@@ -32,8 +16,8 @@ export const AvatarCanvas: React.FC<{
   zoom?: number;
 }> = ({ width = 128, height = 128, zoom = 1 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
-  const { equipped, config, currentAnimation, animationFrame, nextFrame } = useAvatarStore();
+  const animationRef = useRef<number | null>(null);
+  const { equipped, config, currentAnimation = 'idle', animationFrame = 0, nextFrame } = useAvatarStore();
 
   // Color-coded placeholder colors for easy identification
   const PLACEHOLDER_COLORS = {
@@ -87,7 +71,7 @@ export const AvatarCanvas: React.FC<{
   ) => {
     if (!equipment) return;
 
-    const rarityColor = RARITY_COLORS[equipment.rarity];
+    const rarityColor = RARITY_COLORS[equipment.rarity as keyof typeof RARITY_COLORS];
     
     // Draw glow effect for rare+ items
     if (rarityColor.glow) {

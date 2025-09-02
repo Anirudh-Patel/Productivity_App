@@ -11,12 +11,12 @@ const Header = ({ onToggleSidebar }: HeaderProps) => {
   const gold = user?.gold || 0;
 
   return (
-    <header className="h-16 bg-theme-primary border-b border-gray-800 px-6 flex items-center justify-between">
+    <header className="h-16 bg-solo-primary border-b border-gray-800 px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-2 hover:bg-theme-bg rounded-lg transition-colors md:hidden"
+            className="p-2 hover:bg-solo-bg rounded-lg transition-colors md:hidden"
             title="Toggle sidebar (Ctrl + \)"
           >
             <Menu className="w-5 h-5" />
@@ -39,7 +39,7 @@ const Header = ({ onToggleSidebar }: HeaderProps) => {
         </div>
 
         {/* Notifications */}
-        <button className="relative p-2 hover:bg-theme-bg rounded-lg transition-colors">
+        <button className="relative p-2 hover:bg-solo-bg rounded-lg transition-colors">
           <Bell className="w-5 h-5" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
         </button>

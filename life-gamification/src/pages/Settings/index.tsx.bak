@@ -32,7 +32,7 @@ const Settings = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Settings Navigation */}
         <FadeIn delay={0}>
-          <div className="bg-theme-primary rounded-lg border border-gray-800 p-4">
+          <div className="bg-solo-primary rounded-lg border border-gray-800 p-4">
             <h3 className="font-semibold mb-4">Categories</h3>
             <nav className="space-y-2">
               {sections.map((section) => {
@@ -43,8 +43,8 @@ const Settings = () => {
                     onClick={() => setActiveSection(section.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                       activeSection === section.id
-                        ? 'bg-solo-accent/20 text-theme-accent border border-theme-accent/30'
-                        : 'text-gray-400 hover:text-theme-fg hover:bg-theme-bg'
+                        ? 'bg-solo-accent/20 text-solo-accent border border-solo-accent/30'
+                        : 'text-gray-400 hover:text-solo-text hover:bg-solo-bg'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -62,7 +62,7 @@ const Settings = () => {
             <FadeIn delay={100}>
               <div className="space-y-6">
                 {/* Theme Selection */}
-                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Palette className="w-5 h-5" />
                     Theme Selection
@@ -78,7 +78,7 @@ const Settings = () => {
                         onClick={() => setTheme(theme.id)}
                         className={`p-4 rounded-lg border cursor-pointer transition-all hover:scale-105 ${
                           currentTheme.id === theme.id
-                            ? 'border-theme-accent/50 bg-solo-accent/10'
+                            ? 'border-solo-accent/50 bg-solo-accent/10'
                             : 'border-gray-700 hover:border-gray-600'
                         }`}
                       >
@@ -99,7 +99,7 @@ const Settings = () => {
                             />
                           </div>
                           {currentTheme.id === theme.id && (
-                            <div className="text-theme-accent text-sm font-medium">Active</div>
+                            <div className="text-solo-accent text-sm font-medium">Active</div>
                           )}
                         </div>
                         
@@ -111,7 +111,7 @@ const Settings = () => {
                 </div>
 
                 {/* Theme Customization */}
-                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
                   <h3 className="text-lg font-semibold mb-4">Customization</h3>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -146,7 +146,7 @@ const Settings = () => {
             <FadeIn delay={100}>
               <div className="space-y-6">
                 {/* User Info */}
-                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Profile Information
@@ -158,12 +158,12 @@ const Settings = () => {
                         <input
                           type="text"
                           defaultValue={user?.username || 'Shadow Warrior'}
-                          className="w-full px-3 py-2 bg-theme-bg border border-gray-700 rounded-lg focus:outline-none focus:border-theme-accent"
+                          className="w-full px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Level</label>
-                        <div className="px-3 py-2 bg-theme-bg border border-gray-700 rounded-lg text-gray-400">
+                        <div className="px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg text-gray-400">
                           {user?.level || 1} (Read-only)
                         </div>
                       </div>
@@ -171,7 +171,7 @@ const Settings = () => {
                     
                     {/* Current Avatar Display */}
                     <div className="flex flex-col items-center">
-                      <div className="w-24 h-24 bg-solo-accent/20 rounded-full flex items-center justify-center text-4xl border-2 border-theme-accent/30 mb-3">
+                      <div className="w-24 h-24 bg-solo-accent/20 rounded-full flex items-center justify-center text-4xl border-2 border-solo-accent/30 mb-3">
                         🗡️
                       </div>
                       <p className="text-sm text-gray-400">Current Avatar</p>
@@ -181,7 +181,7 @@ const Settings = () => {
                 </div>
 
                 {/* Avatar Selection */}
-                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
                   <h3 className="text-lg font-semibold mb-4">Character Avatar</h3>
                   <p className="text-gray-400 text-sm mb-4">
                     Choose your character avatar. Unlock new avatars by leveling up!
@@ -201,7 +201,7 @@ const Settings = () => {
           {/* Other sections placeholder */}
           {!['appearance', 'profile'].includes(activeSection) && (
             <FadeIn delay={100}>
-              <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+              <div className="bg-solo-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">
                   <SettingsIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>{sections.find(s => s.id === activeSection)?.label} settings coming soon!</p>

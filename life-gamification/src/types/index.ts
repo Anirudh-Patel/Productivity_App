@@ -1,3 +1,43 @@
+// Recurring quest types
+export interface RecurrencePattern {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom';
+  interval: number; // e.g., every 2 days, every 3 weeks
+  weekdays?: number[]; // For weekly: [0,1,2,3,4,5,6] where 0 = Sunday
+  month_day?: number; // For monthly: day of month (1-31)
+  end_date?: string; // Optional end date
+  max_completions?: number; // Optional completion limit
+}
+
+// Quest chain types
+export interface QuestChain {
+  id: string;
+  title: string;
+  description: string;
+  theme: string;
+  total_quests: number;
+  completed_quests: number;
+  is_completed: boolean;
+  story_text?: string;
+  unlock_requirements?: {
+    level?: number;
+    completed_chains?: string[];
+    achievements?: number[];
+  };
+}
+
+// Quest template types
+export interface QuestTemplate {
+  id: string;
+  name: string;
+  category: string;
+  difficulty: number;
+  title_template: string;
+  description_template: string;
+  variables?: Record<string, string[]>; // Variable options for customization
+  default_duration?: number; // In minutes
+  tags: string[];
+}
+
 // Database types matching Rust structs
 export interface User {
   id: number;
@@ -30,10 +70,20 @@ export interface Task {
   priority: number;
   created_at: string;
   completed_at?: string;
-  task_type: 'standard' | 'goal';
+  task_type: 'standard' | 'goal' | 'recurring';
   goal_target?: number;
   goal_current?: number;
   goal_unit?: string;
+  // Recurring quest fields
+  recurrence_pattern?: RecurrencePattern;
+  next_due_date?: string;
+  current_streak?: number;
+  best_streak?: number;
+  total_completions?: number;
+  // Quest chain fields
+  chain_id?: string;
+  chain_order?: number;
+  is_chain_completed?: boolean;
 }
 
 export interface CreateTaskRequest {
@@ -43,9 +93,14 @@ export interface CreateTaskRequest {
   difficulty?: number;
   due_date?: string;
   priority?: number;
-  task_type?: 'standard' | 'goal';
+  task_type?: 'standard' | 'goal' | 'recurring';
   goal_target?: number;
   goal_unit?: string;
+  // Recurring quest fields
+  recurrence_pattern?: RecurrencePattern;
+  // Quest chain fields
+  chain_id?: string;
+  chain_order?: number;
 }
 
 export interface Achievement {

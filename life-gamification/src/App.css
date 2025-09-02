@@ -2,16 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Avatar System Styles */
+.pixelated {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+}
+
+.avatar-container {
+  position: relative;
+}
+
+.avatar-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Rarity border colors */
+.border-common { border-color: #808080; }
+.border-uncommon { border-color: #1EFF00; }
+.border-rare { border-color: #0070DD; }
+.border-epic { border-color: #A335EE; }
+.border-legendary { 
+  border-color: #FF8000;
+  animation: legendary-glow 2s ease-in-out infinite;
+}
+
+@keyframes legendary-glow {
+  0%, 100% { box-shadow: 0 0 5px #FF8000; }
+  50% { box-shadow: 0 0 20px #FF8000, 0 0 30px #FF8000; }
+}
+
 @layer base {
   :root {
+    /* Default Solo Leveling theme */
     --background: 10 14 26; /* #0A0E1A */
     --foreground: 229 231 235; /* #E5E7EB */
     --primary: 30 42 58; /* #1E2A3A */
+    --secondary: 55 65 81; /* #374151 */
     --accent: 0 212 255; /* #00D4FF */
+    --muted: 107 114 128; /* #6B7280 */
+    --success: 16 185 129; /* #10B981 */
+    --warning: 245 158 11; /* #F59E0B */
+    --error: 239 68 68; /* #EF4444 */
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, rgb(0 212 255) 0%, rgb(55 65 81) 100%);
+    --gradient-secondary: linear-gradient(135deg, rgb(55 65 81) 0%, rgb(30 42 58) 100%);
+    --gradient-accent: linear-gradient(135deg, rgb(0 212 255) 0%, rgb(59 130 246) 100%);
   }
 
   body {
-    @apply bg-solo-bg text-solo-text;
+    @apply bg-theme-bg text-theme-fg;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;

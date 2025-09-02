@@ -1,3 +1,4 @@
+/* Pixel Perfect Rendering */
 .pixelated {
   image-rendering: -moz-crisp-edges;
   image-rendering: -webkit-crisp-edges;
@@ -6,27 +7,287 @@
   -ms-interpolation-mode: nearest-neighbor;
 }
 
+/* Avatar Container Styles */
 .avatar-container {
   position: relative;
+  display: inline-block;
 }
 
 .avatar-layer {
   position: absolute;
   top: 0;
   left: 0;
+  pointer-events: none;
 }
 
-/* Rarity border colors */
-.border-common { border-color: #808080; }
-.border-uncommon { border-color: #1EFF00; }
-.border-rare { border-color: #0070DD; }
-.border-epic { border-color: #A335EE; }
+/* Rarity Border Colors */
+.border-common { 
+  border-color: #808080; 
+}
+
+.border-uncommon { 
+  border-color: #1EFF00; 
+}
+
+.border-rare { 
+  border-color: #0070DD; 
+  box-shadow: 0 0 5px rgba(0, 112, 221, 0.3);
+}
+
+.border-epic { 
+  border-color: #A335EE; 
+  box-shadow: 0 0 8px rgba(163, 53, 238, 0.4);
+}
+
 .border-legendary { 
   border-color: #FF8000;
   animation: legendary-glow 2s ease-in-out infinite;
 }
 
+/* Legendary Item Glow Animation */
 @keyframes legendary-glow {
-  0%, 100% { box-shadow: 0 0 5px #FF8000; }
-  50% { box-shadow: 0 0 20px #FF8000, 0 0 30px #FF8000; }
+  0%, 100% { 
+    box-shadow: 0 0 5px #FF8000, 0 0 10px rgba(255, 128, 0, 0.3);
+    border-color: #FF8000;
+  }
+  50% { 
+    box-shadow: 0 0 20px #FF8000, 0 0 30px rgba(255, 128, 0, 0.6), 0 0 40px rgba(255, 128, 0, 0.3);
+    border-color: #FFB366;
+  }
+}
+
+/* Epic Item Pulse */
+.border-epic {
+  animation: epic-pulse 3s ease-in-out infinite;
+}
+
+@keyframes epic-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(163, 53, 238, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(163, 53, 238, 0.6), 0 0 25px rgba(163, 53, 238, 0.3);
+  }
+}
+
+/* Rare Item Shimmer */
+.border-rare {
+  animation: rare-shimmer 4s linear infinite;
+}
+
+@keyframes rare-shimmer {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 112, 221, 0.3);
+  }
+  25% {
+    box-shadow: 0 0 10px rgba(0, 112, 221, 0.5), 2px 0 5px rgba(0, 112, 221, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(0, 112, 221, 0.4);
+  }
+  75% {
+    box-shadow: -2px 0 5px rgba(0, 112, 221, 0.3), 0 0 10px rgba(0, 112, 221, 0.4);
+  }
+}
+
+/* Equipment Slot Hover Effects */
+.equipment-slot {
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.equipment-slot:hover {
+  transform: scale(1.05);
+}
+
+.equipment-slot:hover::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Inventory Item Hover Effects */
+.inventory-item {
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.inventory-item:hover {
+  transform: translateY(-2px);
+}
+
+.inventory-item:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Avatar Canvas Container */
+.avatar-canvas-container {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-canvas-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 60%, rgba(0, 0, 0, 0.1) 100%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Equipment Stats Tooltip */
+.equipment-tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.equipment-tooltip.show {
+  opacity: 1;
+}
+
+.equipment-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Animation State Classes */
+.avatar-idle {
+  animation: idle-bob 4s ease-in-out infinite;
+}
+
+@keyframes idle-bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.avatar-walk {
+  animation: walk-cycle 0.8s steps(4) infinite;
+}
+
+@keyframes walk-cycle {
+  0% { transform: translateY(0); }
+  25% { transform: translateY(-1px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+
+.avatar-attack {
+  animation: attack-strike 0.6s ease-out;
+}
+
+@keyframes attack-strike {
+  0% { transform: translateX(0) scale(1); }
+  30% { transform: translateX(-3px) scale(1.05); }
+  60% { transform: translateX(5px) scale(0.95); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+.avatar-jump {
+  animation: jump-arc 0.8s ease-in-out;
+}
+
+@keyframes jump-arc {
+  0% { transform: translateY(0) scaleY(1); }
+  20% { transform: translateY(-2px) scaleY(0.95); }
+  50% { transform: translateY(-8px) scaleY(1.05); }
+  80% { transform: translateY(-2px) scaleY(0.95); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .equipment-slot {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .inventory-item {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .avatar-canvas-container {
+    transform: scale(0.8);
+  }
+}
+
+/* High DPI Display Adjustments */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .pixelated {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Dark Mode Optimizations */
+@media (prefers-color-scheme: dark) {
+  .equipment-tooltip {
+    background: rgba(20, 20, 20, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .equipment-slot:hover::after {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Performance Optimizations */
+.avatar-container * {
+  will-change: transform;
+}
+
+.equipment-slot,
+.inventory-item {
+  contain: layout style;
+}
+
+/* Accessibility */
+.equipment-slot:focus,
+.inventory-item:focus {
+  outline: 2px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+.equipment-slot:focus-visible,
+.inventory-item:focus-visible {
+  outline: 2px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+/* Loading State */
+.avatar-loading {
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
