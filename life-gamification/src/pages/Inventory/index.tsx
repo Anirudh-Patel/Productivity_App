@@ -1,0 +1,252 @@
+import { useEffect, useState } from 'react'
+import { Package, Heart, Zap, Star, Crown, Shield, Sparkles } from 'lucide-react'
+import { useGameStore } from '../../store/gameStore'
+import { useToast } from '../../shared/components/ui/Toast'
+import { FadeIn, StaggeredList } from '../../shared/components/ui/AnimatedComponents'
+import type { InventoryItem } from '../../types'
+
+const rarityColors = {
+  common: 'border-gray-600 bg-gray-900/50',
+  uncommon: 'border-green-500 bg-green-900/20',
+  rare: 'border-blue-500 bg-blue-900/20',
+  epic: 'border-purple-500 bg-purple-900/20',
+  legendary: 'border-orange-500 bg-orange-900/20'
+}
+
+const rarityTextColors = {
+  common: 'text-gray-300',
+  uncommon: 'text-green-400',
+  rare: 'text-blue-400',
+  epic: 'text-purple-400',
+  legendary: 'text-orange-400'
+}
+
+const getItemIcon = (icon: string) => {
+  switch (icon) {
+    case 'heart': return <Heart className="w-6 h-6" />
+    case 'zap': return <Zap className="w-6 h-6" />
+    case 'star': return <Star className="w-6 h-6" />
+    case 'crown': return <Crown className="w-6 h-6" />
+    case 'shield': return <Shield className="w-6 h-6" />
+    case 'sparkles': return <Sparkles className="w-6 h-6" />
+    default: return <Package className="w-6 h-6" />
+  }
+}
+
+const Inventory = () => {
+  const { inventory, fetchInventory, useItem, equipTitle, unequipTitle, user } = useGameStore()
+  const toast = useToast()
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'consumable' | 'title' | 'upgrade'>('all')
+  const [usingItemId, setUsingItemId] = useState<string | null>(null)
+  const [equipingTitleId, setEquipingTitleId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchInventory()
+  }, [fetchInventory])
+
+  const filteredItems = inventory.items.filter(item => 
+    selectedCategory === 'all' || item.item_type === selectedCategory
+  )
+
+  const handleUseItem = async (item: InventoryItem) => {
+    if (item.item_type !== 'consumable') {
+      toast.error('This item cannot be used directly')
+      return
+    }
+
+    setUsingItemId(item.id)
+    
+    try {
+      await useItem(item.id)
+      toast.success(`Used ${item.name}!`, 'Effect applied successfully')
+    } catch (error: any) {
+      toast.error('Failed to use item', error.message || 'Unknown error occurred')
+    } finally {
+      setUsingItemId(null)
+    }
+  }
+
+  const handleEquipTitle = async (item: InventoryItem) => {
+    if (item.item_type !== 'title') {
+      toast.error('This item is not a title')
+      return
+    }
+
+    setEquipingTitleId(item.id)
+    
+    try {
+      const isCurrentlyEquipped = user?.active_title === item.name
+      
+      if (isCurrentlyEquipped) {
+        await unequipTitle()
+        toast.success('Title unequipped!')
+      } else {
+        await equipTitle(item.name)
+        toast.success(`Equipped title: ${item.name}!`)
+      }
+    } catch (error: any) {
+      toast.error('Failed to update title', error.message || 'Unknown error occurred')
+    } finally {
+      setEquipingTitleId(null)
+    }
+  }
+
+  return (
+    <FadeIn>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Inventory</h1>
+          <p className="text-gray-400">Manage your collected items and consumables</p>
+          <div className="flex items-center gap-2 mt-2">
+            <Package className="w-5 h-5 text-theme-accent" />
+            <span className="text-theme-accent font-semibold">
+              {inventory.items.length} Items
+            </span>
+          </div>
+        </div>
+
+        {/* Category Filters */}
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { id: 'all', label: 'All Items' },
+            { id: 'consumable', label: 'Consumables' },
+            { id: 'title', label: 'Titles' },
+            { id: 'upgrade', label: 'Upgrades' }
+          ].map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id as any)}
+              className={`px-4 py-2 rounded-lg border transition-colors ${
+                selectedCategory === category.id
+                  ? 'bg-solo-accent border-solo-accent text-white'
+                  : 'border-gray-700 bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
+              }`}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Loading State */}
+        {inventory.loading && (
+          <div className="text-center py-12 text-gray-400">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-50 animate-spin" />
+            <p>Loading inventory...</p>
+          </div>
+        )}
+
+        {/* Inventory Items Grid */}
+        {!inventory.loading && filteredItems.length > 0 && (
+          <StaggeredList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredItems.map((item) => (
+              <div
+                key={`${item.id}-${item.quantity}`}
+                className={`p-4 rounded-lg border-2 ${rarityColors[item.rarity]} transition-all hover:scale-105`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-lg bg-gray-800/50 ${rarityTextColors[item.rarity]}`}>
+                      {getItemIcon(item.icon)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{item.name}</h3>
+                      <p className={`text-xs capitalize ${rarityTextColors[item.rarity]}`}>
+                        {item.rarity} {item.item_type}
+                      </p>
+                    </div>
+                  </div>
+                  {item.quantity > 1 && (
+                    <div className="bg-theme-accent text-white text-xs font-bold px-2 py-1 rounded-full">
+                      {item.quantity}
+                    </div>
+                  )}
+                </div>
+                
+                <p className="text-gray-400 text-sm mb-2">{item.description}</p>
+                
+                {item.effect && (
+                  <p className="text-solo-accent text-sm mb-3">Effect: {item.effect.replace(/:/g, ' ')}</p>
+                )}
+                
+                <div className="flex gap-2">
+                  {item.item_type === 'consumable' && (
+                    <button
+                      onClick={() => handleUseItem(item)}
+                      disabled={usingItemId === item.id || item.quantity <= 0}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                        usingItemId === item.id || item.quantity <= 0
+                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {usingItemId === item.id && (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      )}
+                      {usingItemId === item.id 
+                        ? 'Using...' 
+                        : item.quantity <= 0 
+                          ? 'Out of Stock' 
+                          : 'Use'
+                      }
+                    </button>
+                  )}
+                  
+                  {item.item_type === 'title' && (
+                    <button
+                      onClick={() => handleEquipTitle(item)}
+                      disabled={equipingTitleId === item.id}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                        user?.active_title === item.name
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : equipingTitleId === item.id
+                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-700 text-white'
+                      }`}
+                    >
+                      {equipingTitleId === item.id && (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      )}
+                      {equipingTitleId === item.id
+                        ? 'Updating...'
+                        : user?.active_title === item.name
+                        ? 'Unequip Title'
+                        : 'Equip Title'
+                      }
+                    </button>
+                  )}
+                  
+                  {item.item_type === 'upgrade' && (
+                    <button
+                      className="flex-1 py-2 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                    >
+                      Apply Upgrade
+                    </button>
+                  )}
+                </div>
+                
+                <div className="mt-2 text-xs text-gray-500">
+                  Obtained: {new Date(item.obtained_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </StaggeredList>
+        )}
+
+        {/* Empty State */}
+        {!inventory.loading && filteredItems.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No items found in this category</p>
+            <p className="text-sm mt-2">
+              {selectedCategory === 'all' 
+                ? 'Visit the shop to purchase your first items!' 
+                : `No ${selectedCategory} items in your inventory`}
+            </p>
+          </div>
+        )}
+      </div>
+    </FadeIn>
+  )
+}
+
+export default Inventory

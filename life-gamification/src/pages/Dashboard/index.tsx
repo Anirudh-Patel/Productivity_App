@@ -1,8 +1,9 @@
-import { Calendar, Target, TrendingUp, Award, Brain, Zap } from 'lucide-react'
+import { Calendar, Target, TrendingUp, Award, Brain, Zap, BarChart3 } from 'lucide-react'
 import { useRenderPerformance } from '../../utils/performance'
 import { useGameStore } from '../../store/gameStore'
 import { analyzeUserPerformance, generateDifficultyRecommendation } from '../../utils/difficultyAdjustment'
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents'
+import { XPProgressChart, TaskCategoryChart, ActivityHeatmap } from '../../shared/components/ui/Charts'
 
 const Dashboard = () => {
   // Performance monitoring
@@ -127,24 +128,188 @@ const Dashboard = () => {
         </div>
       </FadeIn>
 
-      {/* Today's Quests */}
-      <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
-        <h2 className="text-xl font-semibold mb-4">Today's Quests</h2>
-        <div className="text-center py-12 text-gray-400">
-          <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No active quests yet</p>
-          <p className="text-sm mt-2">Start by creating your first quest!</p>
-        </div>
-      </div>
+      {/* Today's Progress */}
+      <FadeIn delay={300}>
+        <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Target className="w-6 h-6 text-theme-accent" />
+            Today's Progress
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Active Quests */}
+            <div>
+              <h3 className="font-medium text-gray-300 mb-3">Active Quests</h3>
+              {tasks.active.length === 0 ? (
+                <div className="text-center py-6 text-gray-400">
+                  <Target className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No active quests</p>
+                  <p className="text-xs mt-1">Create your first quest to get started!</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {tasks.active.slice(0, 5).map((task) => (
+                    <div key={task.id} className="flex items-center justify-between p-3 bg-theme-bg rounded-lg">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{task.title}</div>
+                        <div className="text-xs text-gray-400 capitalize flex items-center gap-2">
+                          <span>{task.category}</span>
+                          <span>•</span>
+                          <span>Level {task.difficulty}</span>
+                          {task.task_type === 'goal' && task.goal_target && (
+                            <>
+                              <span>•</span>
+                              <span>{task.goal_current || 0}/{task.goal_target}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-green-400">
+                        +{task.base_experience_reward} XP
+                      </div>
+                    </div>
+                  ))}
+                  {tasks.active.length > 5 && (
+                    <div className="text-center py-2">
+                      <span className="text-xs text-gray-500">
+                        +{tasks.active.length - 5} more quests
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Level Progress */}
+            <div>
+              <h3 className="font-medium text-gray-300 mb-3">Level Progress</h3>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-theme-accent mb-1">
+                    {user?.level || 1}
+                  </div>
+                  <p className="text-sm text-gray-400">Current Level</p>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-400">XP Progress</span>
+                    <span className="text-theme-accent">
+                      {user?.experience_points?.toLocaleString() || 0} XP
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-3">
+                    <div 
+                      className="bg-theme-accent h-3 rounded-full transition-all duration-500" 
+                      style={{ 
+                        width: user?.experience_to_next_level 
+                          ? `${Math.min(100, ((user.experience_points % 1000) / (user.experience_to_next_level || 1000)) * 100)}%`
+                          : '0%'
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Level {user?.level || 1}</span>
+                    <span>
+                      {user?.experience_to_next_level 
+                        ? `${user.experience_to_next_level - (user.experience_points % 1000)} XP to next level`
+                        : 'Max level reached'}
+                    </span>
+                  </div>
+                </div>
 
-      {/* Recent Achievements */}
-      <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
-        <h2 className="text-xl font-semibold mb-4">Recent Achievements</h2>
-        <div className="text-center py-12 text-gray-400">
-          <Award className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No achievements unlocked yet</p>
-          <p className="text-sm mt-2">Complete quests to earn achievements!</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-2 bg-theme-bg rounded-lg">
+                    <div className="text-lg font-semibold text-yellow-400">{user?.gold || 0}</div>
+                    <div className="text-xs text-gray-400">Gold</div>
+                  </div>
+                  <div className="text-center p-2 bg-theme-bg rounded-lg">
+                    <div className="text-lg font-semibold text-green-400">
+                      {tasks.completed.filter(task => {
+                        const today = new Date().toDateString();
+                        return task.completed_at && new Date(task.completed_at).toDateString() === today;
+                      }).length}
+                    </div>
+                    <div className="text-xs text-gray-400">Today</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </FadeIn>
+
+      {/* Active Buffs & Recommendations */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FadeIn delay={400}>
+          <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              Active Effects
+            </h3>
+            
+            {/* This would show active buffs when implemented */}
+            <div className="text-center py-8 text-gray-400">
+              <Zap className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No active buffs</p>
+              <p className="text-sm mt-2">Use consumables from your inventory to gain temporary boosts!</p>
+            </div>
+          </div>
+        </FadeIn>
+
+        <FadeIn delay={500}>
+          <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-500" />
+              Smart Insights
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="p-3 bg-theme-bg rounded-lg border border-gray-700">
+                <div className="flex items-start gap-2 mb-2">
+                  <TrendingUp className="w-4 h-4 text-theme-accent mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-theme-accent mb-1">
+                      Suggested Difficulty: Level {difficultyRecommendation.suggestedDifficulty}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {difficultyRecommendation.reason}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                    <div 
+                      className="bg-theme-accent h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${difficultyRecommendation.confidenceLevel * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {(difficultyRecommendation.confidenceLevel * 100).toFixed(0)}% confidence
+                  </span>
+                </div>
+              </div>
+
+              {tasks.active.length === 0 && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-400 text-sm">
+                    <Target className="w-4 h-4" />
+                    <span>Ready to start your day? Create your first quest!</span>
+                  </div>
+                </div>
+              )}
+
+              {tasks.active.length > 3 && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-orange-400 text-sm">
+                    <Award className="w-4 h-4" />
+                    <span>You have {tasks.active.length} active quests. Consider focusing on completing some before adding more.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </FadeIn>
       </div>
     </div>
   )

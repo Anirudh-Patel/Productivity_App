@@ -7,7 +7,8 @@ import type {
   CreateTaskRequest, 
   UserAchievement, 
   Achievement,
-  Streak 
+  Streak,
+  InventoryItem 
 } from '../types';
 import { logger, logUserAction, logPerformance } from '../utils/logger';
 import { withErrorHandling } from '../utils/errorHandler';
@@ -23,6 +24,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   achievements: {
     unlocked: [],
     available: [],
+    loading: false,
+  },
+  inventory: {
+    items: [],
+    loading: false,
+  },
+  buffs: {
+    active: [],
     loading: false,
   },
   streak: null,
@@ -230,6 +239,167 @@ export const useGameStore = create<GameState>((set, get) => ({
     } catch (error) {
       console.error('Failed to check achievements:', error);
       return [];
+    }
+  },
+
+  purchaseItem: async (itemId: string, price: number): Promise<User> => {
+    try {
+      const updatedUser: User = await invoke('purchase_item', { 
+        itemId, 
+        price: price as number 
+      });
+      
+      // Update user state with new gold amount
+      set({ user: updatedUser });
+      
+      // Refresh inventory to show new item
+      get().fetchInventory();
+      
+      logger.info('Item purchased successfully', { itemId, price }, 'GameStore');
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to purchase item:', error);
+      throw error;
+    }
+  },
+
+  fetchInventory: async () => {
+    set(state => ({
+      inventory: { ...state.inventory, loading: true }
+    }));
+
+    try {
+      const items: InventoryItem[] = await invoke('get_user_inventory');
+      
+      set(state => ({
+        inventory: { 
+          items,
+          loading: false 
+        }
+      }));
+      
+      logger.debug('Inventory fetched successfully', { itemCount: items.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error);
+      set(state => ({
+        inventory: { ...state.inventory, loading: false }
+      }));
+    }
+  },
+
+  useItem: async (itemId: string): Promise<User> => {
+    try {
+      const updatedUser: User = await invoke('use_inventory_item', { itemId });
+      
+      // Update user state
+      set({ user: updatedUser });
+      
+      // Refresh inventory to show updated quantities
+      get().fetchInventory();
+      
+      logger.info('Item used successfully', { itemId }, 'GameStore');
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to use item:', error);
+      throw error;
+    }
+  },
+
+  getUserTitles: async (): Promise<string[]> => {
+    try {
+      const titles: string[] = await invoke('get_user_titles');
+      logger.debug('User titles fetched successfully', { titleCount: titles.length }, 'GameStore');
+      return titles;
+    } catch (error) {
+      console.error('Failed to fetch user titles:', error);
+      throw error;
+    }
+  },
+
+  equipTitle: async (title: string): Promise<User> => {
+    try {
+      const updatedUser: User = await invoke('equip_title', { title });
+      
+      // Update user state
+      set({ user: updatedUser });
+      
+      logger.info('Title equipped successfully', { title }, 'GameStore');
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to equip title:', error);
+      throw error;
+    }
+  },
+
+  unequipTitle: async (): Promise<User> => {
+    try {
+      const updatedUser: User = await invoke('unequip_title');
+      
+      // Update user state
+      set({ user: updatedUser });
+      
+      logger.info('Title unequipped successfully', {}, 'GameStore');
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to unequip title:', error);
+      throw error;
+    }
+  },
+
+  getRecommendedDifficulty: async (taskCategory: string): Promise<number> => {
+    try {
+      const difficulty: number = await invoke('get_recommended_difficulty', { taskCategory });
+      logger.debug('Got recommended difficulty', { taskCategory, difficulty }, 'GameStore');
+      return difficulty;
+    } catch (error) {
+      console.error('Failed to get recommended difficulty:', error);
+      throw error;
+    }
+  },
+
+  getActiveBuffs: async (): Promise<import('../types').Buff[]> => {
+    set(state => ({
+      buffs: { ...state.buffs, loading: true }
+    }));
+
+    try {
+      const buffs: import('../types').Buff[] = await invoke('get_active_buffs');
+      
+      set(state => ({
+        buffs: { 
+          active: buffs,
+          loading: false
+        }
+      }));
+      
+      logger.debug('Active buffs fetched successfully', { buffCount: buffs.length }, 'GameStore');
+      return buffs;
+    } catch (error) {
+      console.error('Failed to fetch active buffs:', error);
+      set(state => ({
+        buffs: { ...state.buffs, loading: false }
+      }));
+      throw error;
+    }
+  },
+
+  applyBuff: async (buffType: string, value: number, statType?: string, durationMinutes: number = 30): Promise<import('../types').Buff> => {
+    try {
+      const buff: import('../types').Buff = await invoke('apply_buff', { 
+        buffType, 
+        value, 
+        statType, 
+        durationMinutes 
+      });
+      
+      // Refresh buffs list
+      get().getActiveBuffs();
+      
+      logger.info('Buff applied successfully', { buffType, value, duration: durationMinutes }, 'GameStore');
+      return buff;
+    } catch (error) {
+      console.error('Failed to apply buff:', error);
+      throw error;
     }
   },
 }));

@@ -54,6 +54,7 @@ export interface User {
   max_health: number;
   gold: number;
   theme_preference: string;
+  active_title?: string;
 }
 
 export interface Task {
@@ -133,6 +134,30 @@ export interface Streak {
   is_active: boolean;
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description: string;
+  item_type: 'consumable' | 'title' | 'upgrade';
+  effect?: string;
+  quantity: number;
+  max_stack: number;
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  icon: string;
+  obtained_at: string;
+}
+
+export interface Buff {
+  id: string;
+  name: string;
+  buff_type: string;
+  value: number;
+  stat_type?: string;
+  duration_minutes: number;
+  applied_at: string;
+  expires_at: string;
+}
+
 // UI State types
 export interface GameState {
   user: User | null;
@@ -146,6 +171,14 @@ export interface GameState {
     available: Achievement[];
     loading: boolean;
   };
+  inventory: {
+    items: InventoryItem[];
+    loading: boolean;
+  };
+  buffs: {
+    active: Buff[];
+    loading: boolean;
+  };
   streak: Streak | null;
   
   // Actions
@@ -156,6 +189,15 @@ export interface GameState {
   updateTaskProgress: (taskId: number, progressAmount: number) => Promise<Task>;
   fetchAchievements: () => Promise<void>;
   checkAchievements: () => Promise<Achievement[]>;
+  purchaseItem: (itemId: string, price: number) => Promise<User>;
+  fetchInventory: () => Promise<void>;
+  useItem: (itemId: string) => Promise<User>;
+  getUserTitles: () => Promise<string[]>;
+  equipTitle: (title: string) => Promise<User>;
+  unequipTitle: () => Promise<User>;
+  getRecommendedDifficulty: (taskCategory: string) => Promise<number>;
+  getActiveBuffs: () => Promise<Buff[]>;
+  applyBuff: (buffType: string, value: number, statType?: string, durationMinutes?: number) => Promise<Buff>;
 }
 
 export const DIFFICULTY_LEVELS = {
