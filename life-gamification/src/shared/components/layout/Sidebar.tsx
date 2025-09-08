@@ -7,7 +7,9 @@ import {
   ShoppingBag, 
   Settings,
   Swords,
-  Shield
+  Shield,
+  Package,
+  Zap
 } from 'lucide-react'
 import { useGameStore } from '../../../store/gameStore'
 import { SkeletonProgressBar, SkeletonText } from '../../components/ui/Skeleton'
@@ -33,7 +35,9 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: Home },
   { path: '/tasks', label: 'Quests', icon: CheckSquare },
   { path: '/stats', label: 'Stats', icon: BarChart3 },
+  { path: '/skills', label: 'Skills', icon: Zap },
   { path: '/equipment', label: 'Equipment', icon: Shield },
+  { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/shop', label: 'Shop', icon: ShoppingBag },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -125,7 +129,9 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
                 {/* Cosmetic Title Section */}
                 <div className="text-center mb-4">
                   <p className="text-xs text-gray-500">Title</p>
-                  <p className="text-sm font-semibold text-purple-400">Dragon Slayer</p>
+                  <p className="text-sm font-semibold text-purple-400">
+                    {user?.active_title || 'No Title Equipped'}
+                  </p>
                 </div>
                 
                 {/* XP Bar */}

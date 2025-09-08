@@ -23,11 +23,11 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <>
-      <div className="flex h-screen bg-theme-bg text-theme-fg">
+      <div className="grid grid-cols-[auto_1fr] h-screen bg-theme-bg text-theme-fg">
         <Sidebar collapsed={sidebarCollapsed} />
-        <div className="flex-1 flex flex-col">
+        <div className="flex flex-col h-full overflow-hidden">
           <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 p-6 overflow-y-auto bg-theme-bg">
             {children}
           </main>
         </div>
