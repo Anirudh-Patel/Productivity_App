@@ -1365,6 +1365,19 @@ async fn reset_skill_tree() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn update_node_position(node_key: String, x_position: f64, y_position: f64) -> Result<(), String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Update node position in database
+    conn.execute(
+        "UPDATE skill_nodes SET x_position = ?, y_position = ? WHERE node_key = ?",
+        rusqlite::params![x_position, y_position, node_key]
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
 // Get recommended task difficulty based on user stats
 #[tauri::command]
 async fn get_recommended_difficulty(task_category: String) -> Result<i64, String> {
@@ -1440,6 +1453,7 @@ pub fn run() {
             allocate_skill_node,
             deallocate_skill_node,
             reset_skill_tree,
+            update_node_position,
             avatar::get_user_equipment,
             avatar::equip_item,
             avatar::unequip_item,

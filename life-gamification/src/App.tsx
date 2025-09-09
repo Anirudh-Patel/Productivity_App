@@ -3,7 +3,9 @@ import Layout from './shared/components/layout/Layout'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Stats from './pages/Stats'
+import SkillTreePage from './pages/SkillTree'
 import Equipment from './pages/Equipment'
+import Inventory from './pages/Inventory'
 import Shop from './pages/Shop'
 import Settings from './pages/Settings'
 import { ErrorBoundary } from './shared/components/ui/ErrorBoundary'
@@ -33,7 +35,9 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/stats" element={<Stats />} />
+                <Route path="/skills" element={<SkillTreePage />} />
                 <Route path="/equipment" element={<Equipment />} />
+                <Route path="/inventory" element={<Inventory />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>

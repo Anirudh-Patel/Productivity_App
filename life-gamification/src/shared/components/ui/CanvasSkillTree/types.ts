@@ -254,11 +254,23 @@ export interface SkillTreeState {
   loading: boolean;
   error: string | null;
   
+  // Edit mode
+  editMode: boolean;
+  pendingChanges: Map<string, { x: number, y: number }>;
+  pendingDeletions: Set<string>;
+  
   // Actions
   loadSkillTree: () => Promise<void>;
   allocateNode: (nodeKey: string) => Promise<void>;
   deallocateNode: (nodeKey: string) => Promise<void>;
   resetTree: () => Promise<void>;
+  setEditMode: (enabled: boolean) => void;
+  updateNodePosition: (nodeKey: string, x: number, y: number) => Promise<void>;
+  updateNodePositionLocal: (nodeKey: string, x: number, y: number) => void;
+  markNodeForDeletion: (nodeKey: string) => void;
+  unmarkNodeForDeletion: (nodeKey: string) => void;
+  savePendingChanges: () => Promise<void>;
+  discardPendingChanges: () => void;
   
   // Computed
   getNodeStatus: (nodeKey: string) => NodeStatus;

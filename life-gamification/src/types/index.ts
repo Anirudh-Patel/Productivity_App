@@ -179,6 +179,11 @@ export interface GameState {
     active: Buff[];
     loading: boolean;
   };
+  skills: {
+    availablePoints: number;
+    unlockedSkills: string[];
+    loading: boolean;
+  };
   streak: Streak | null;
   
   // Actions
@@ -198,6 +203,9 @@ export interface GameState {
   getRecommendedDifficulty: (taskCategory: string) => Promise<number>;
   getActiveBuffs: () => Promise<Buff[]>;
   applyBuff: (buffType: string, value: number, statType?: string, durationMinutes?: number) => Promise<Buff>;
+  fetchSkillPoints: () => Promise<void>;
+  fetchUnlockedSkills: () => Promise<void>;
+  unlockSkill: (skillId: string) => Promise<User>;
 }
 
 export const DIFFICULTY_LEVELS = {

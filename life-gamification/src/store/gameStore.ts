@@ -34,6 +34,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     active: [],
     loading: false,
   },
+  skills: {
+    availablePoints: 0,
+    unlockedSkills: [],
+    loading: false,
+  },
   streak: null,
 
   fetchUser: async () => {
@@ -399,6 +404,91 @@ export const useGameStore = create<GameState>((set, get) => ({
       return buff;
     } catch (error) {
       console.error('Failed to apply buff:', error);
+      throw error;
+    }
+  },
+
+  fetchSkillPoints: async () => {
+    set(state => ({
+      skills: { ...state.skills, loading: true }
+    }));
+
+    try {
+      // For now, calculate skill points based on user level
+      const user = get().user;
+      if (user) {
+        const availablePoints = Math.max(0, user.level - 1); // 1 skill point per level after level 1
+        
+        set(state => ({
+          skills: { 
+            ...state.skills,
+            availablePoints,
+            loading: false
+          }
+        }));
+      } else {
+        set(state => ({
+          skills: { ...state.skills, loading: false }
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch skill points:', error);
+      set(state => ({
+        skills: { ...state.skills, loading: false }
+      }));
+    }
+  },
+
+  fetchUnlockedSkills: async () => {
+    try {
+      // For now, return empty array since we don't have backend implementation
+      // In the future, this would call: const skills = await invoke('get_unlocked_skills');
+      const unlockedSkills: string[] = [];
+      
+      set(state => ({
+        skills: {
+          ...state.skills,
+          unlockedSkills
+        }
+      }));
+      
+      logger.debug('Unlocked skills fetched successfully', { skillCount: unlockedSkills.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch unlocked skills:', error);
+      throw error;
+    }
+  },
+
+  unlockSkill: async (skillId: string): Promise<User> => {
+    try {
+      // For now, simulate skill unlock by spending skill points
+      // In the future, this would call: const updatedUser = await invoke('unlock_skill', { skillId });
+      
+      const currentState = get();
+      const user = currentState.user;
+      const skills = currentState.skills;
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      if (skills.availablePoints <= 0) {
+        throw new Error('Not enough skill points');
+      }
+
+      // Mock implementation: Add skill to unlocked list and decrease skill points
+      set(state => ({
+        skills: {
+          ...state.skills,
+          availablePoints: state.skills.availablePoints - 1,
+          unlockedSkills: [...state.skills.unlockedSkills, skillId]
+        }
+      }));
+      
+      logger.info('Skill unlocked successfully', { skillId }, 'GameStore');
+      return user;
+    } catch (error) {
+      console.error('Failed to unlock skill:', error);
       throw error;
     }
   },

@@ -20,6 +20,9 @@ export const useSkillTreeStore = create<SkillTreeState>((set, get) => ({
   userStats: null,
   loading: false,
   error: null,
+  editMode: false,
+  pendingChanges: new Map<string, { x: number, y: number }>(),
+  pendingDeletions: new Set<string>(),
 
   loadSkillTree: async () => {
     console.log('SkillTreeStore: loadSkillTree called');
@@ -296,6 +299,129 @@ export const useSkillTreeStore = create<SkillTreeState>((set, get) => ({
 
   canAllocateNode: (nodeKey: string): boolean => {
     return get().getNodeStatus(nodeKey) === 'available';
+  },
+
+  setEditMode: (enabled: boolean) => {
+    if (!enabled) {
+      // When disabling edit mode, clear pending changes
+      set({ editMode: enabled, pendingChanges: new Map() });
+    } else {
+      set({ editMode: enabled });
+    }
+  },
+
+  updateNodePositionLocal: (nodeKey: string, x: number, y: number) => {
+    set(state => {
+      const newPendingChanges = new Map(state.pendingChanges);
+      newPendingChanges.set(nodeKey, { x, y });
+      
+      return {
+        // Update the visual position immediately
+        nodes: state.nodes.map(node => 
+          node.node_key === nodeKey 
+            ? { ...node, x_position: x, y_position: y }
+            : node
+        ),
+        pendingChanges: newPendingChanges
+      };
+    });
+  },
+
+  savePendingChanges: async () => {
+    const { pendingChanges } = get();
+    
+    if (pendingChanges.size === 0) {
+      return;
+    }
+
+    try {
+      console.log(`Saving ${pendingChanges.size} node position changes...`);
+      
+      // Save all pending changes to the backend
+      const promises = Array.from(pendingChanges.entries()).map(([nodeKey, position]) =>
+        withErrorHandling(
+          () => invoke('update_node_position', { 
+            nodeKey, 
+            xPosition: position.x, 
+            yPosition: position.y 
+          }),
+          { component: 'SkillTreeStore', action: 'savePendingChanges' }
+        )
+      );
+
+      const results = await Promise.allSettled(promises);
+      
+      // Check for any failures
+      const failures = results.filter(result => 
+        result.status === 'rejected' || 
+        (result.status === 'fulfilled' && result.value.error)
+      );
+
+      if (failures.length > 0) {
+        console.error(`Failed to save ${failures.length} out of ${pendingChanges.size} changes`);
+        logger.error('Some node position updates failed', { failureCount: failures.length }, 'SkillTreeStore');
+        throw new Error(`Failed to save ${failures.length} position changes`);
+      }
+
+      // Clear pending changes on success
+      set({ pendingChanges: new Map() });
+      
+      logger.info('All node position changes saved successfully', { 
+        changeCount: pendingChanges.size 
+      }, 'SkillTreeStore');
+      
+      console.log(`Successfully saved ${pendingChanges.size} node position changes`);
+
+    } catch (error) {
+      logger.error('Failed to save pending changes', error, 'SkillTreeStore');
+      throw error;
+    }
+  },
+
+  discardPendingChanges: () => {
+    const { pendingChanges } = get();
+    
+    if (pendingChanges.size === 0) {
+      return;
+    }
+
+    // Revert nodes back to their original positions by reloading
+    set(state => ({ 
+      pendingChanges: new Map(),
+      // Note: We could reload the skill tree here, but for performance
+      // we'll just clear pending changes. The positions will revert
+      // when the user exits edit mode or refreshes.
+    }));
+    
+    console.log(`Discarded ${pendingChanges.size} pending position changes`);
+  },
+
+  updateNodePosition: async (nodeKey: string, x: number, y: number) => {
+    try {
+      // Update backend first
+      const result = await withErrorHandling(
+        () => invoke('update_node_position', { nodeKey, xPosition: x, yPosition: y }),
+        { component: 'SkillTreeStore', action: 'updateNodePosition' }
+      );
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      // Update local state
+      set(state => ({
+        nodes: state.nodes.map(node => 
+          node.node_key === nodeKey 
+            ? { ...node, x_position: x, y_position: y }
+            : node
+        )
+      }));
+
+      logger.info('Node position updated', { nodeKey, x, y }, 'SkillTreeStore');
+    } catch (error) {
+      logger.error('Failed to update node position', error, 'SkillTreeStore');
+      throw error;
+    }
   }
 }));
 

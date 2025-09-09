@@ -13,6 +13,8 @@ interface SkillTreeCanvasProps {
   onNodeClick: (nodeKey: string) => void;
   onNodeHover: (nodeKey: string | null) => void;
   onViewportChange?: (viewport: Viewport) => void;
+  editMode?: boolean;
+  onNodePositionChange?: (nodeKey: string, x: number, y: number) => void;
   className?: string;
 }
 
@@ -25,6 +27,8 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
   onNodeClick,
   onNodeHover,
   onViewportChange,
+  editMode = false,
+  onNodePositionChange,
   className = ''
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,6 +55,14 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [isDraggingNode, setIsDraggingNode] = useState(false);
+  const [draggingNode, setDraggingNode] = useState<string | null>(null);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [dragStartMousePos, setDragStartMousePos] = useState({ x: 0, y: 0 });
+  
+  // Refs to track initial state
+  const hasInitiallyCenteredRef = useRef(false);
+  const initialNodeCountRef = useRef(0);
   
   // Managers
   const viewportManager = useMemo(() => new ViewportManager(), []);
@@ -117,13 +129,23 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
     const clickedNode = interactionManager.findNodeAt(worldX, worldY, nodes);
     
     if (clickedNode) {
-      onNodeClick(clickedNode.node_key);
+      if (editMode) {
+        // Start dragging node in edit mode
+        setIsDraggingNode(true);
+        setDraggingNode(clickedNode.node_key);
+        setDragStartPos({ x: clickedNode.x_position, y: clickedNode.y_position });
+        setDragStartMousePos({ x: e.clientX, y: e.clientY });
+        setLastMousePos({ x: e.clientX, y: e.clientY });
+      } else {
+        // Normal node click
+        onNodeClick(clickedNode.node_key);
+      }
     } else {
-      // Start dragging
+      // Start dragging viewport
       setIsDragging(true);
       setLastMousePos({ x: e.clientX, y: e.clientY });
     }
-  }, [viewport, nodes, onNodeClick, interactionManager]);
+  }, [viewport, nodes, onNodeClick, interactionManager, editMode]);
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -132,7 +154,11 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    if (isDragging) {
+    if (isDraggingNode && draggingNode) {
+      // Update last mouse position for dragging calculation
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+      
+    } else if (isDragging) {
       // Pan the viewport
       const deltaX = e.clientX - lastMousePos.x;
       const deltaY = e.clientY - lastMousePos.y;
@@ -157,11 +183,35 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
         onNodeHover(nodeKey);
       }
     }
-  }, [isDragging, lastMousePos, viewport, nodes, hoveredNode, onNodeHover, interactionManager]);
+  }, [isDragging, isDraggingNode, draggingNode, lastMousePos, viewport, nodes, hoveredNode, onNodeHover, interactionManager, dragStartPos]);
   
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (isDraggingNode && draggingNode && onNodePositionChange) {
+      // Calculate final position using the initial mouse position stored in dragStartPos
+      // and current mouse position to get the total movement
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        // Calculate total delta in screen coordinates using the stored start position
+        const totalDeltaX = (e.clientX - dragStartMousePos.x) / viewport.zoom;
+        const totalDeltaY = (e.clientY - dragStartMousePos.y) / viewport.zoom;
+        
+        // Calculate new world position
+        const newX = dragStartPos.x + totalDeltaX;
+        const newY = dragStartPos.y + totalDeltaY;
+        
+        console.log(`Moving node ${draggingNode} from (${dragStartPos.x}, ${dragStartPos.y}) to (${newX}, ${newY})`);
+        // Use local update instead of async database update
+        onNodePositionChange(draggingNode, newX, newY);
+      }
+    }
+    
+    // Reset all drag states
     setIsDragging(false);
-  }, []);
+    setIsDraggingNode(false);
+    setDraggingNode(null);
+    setDragStartPos({ x: 0, y: 0 });
+    setDragStartMousePos({ x: 0, y: 0 });
+  }, [isDraggingNode, draggingNode, onNodePositionChange, dragStartPos, dragStartMousePos, viewport]);
   
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -261,12 +311,19 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
     };
   }, [handleResize]);
   
-  // Center viewport when nodes change
+  // Center viewport when nodes are first loaded (not when positions change)
   useEffect(() => {
-    if (nodes.length > 0 && viewport.width > 0 && viewport.height > 0) {
-      centerViewport();
+    if (nodes.length > 0 && viewport.width > 0 && viewport.height > 0 && !isDraggingNode) {
+      // Only center if we haven't centered yet or if nodes count actually changed (not just position updates)
+      const nodeCountChanged = nodes.length !== initialNodeCountRef.current;
+      
+      if (!hasInitiallyCenteredRef.current || nodeCountChanged) {
+        hasInitiallyCenteredRef.current = true;
+        initialNodeCountRef.current = nodes.length;
+        centerViewport();
+      }
     }
-  }, [nodes.length, viewport.width, viewport.height, centerViewport]);
+  }, [nodes.length, viewport.width, viewport.height, centerViewport, isDraggingNode]);
   
   // Notify parent of viewport changes
   useEffect(() => {
@@ -304,13 +361,17 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing"
+        className={`w-full h-full ${editMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ 
+          cursor: isDraggingNode ? 'move' : 
+                  isDragging ? 'grabbing' : 
+                  editMode ? 'crosshair' : 'grab' 
+        }}
       />
       
       {/* Controls overlay */}
@@ -352,6 +413,12 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
         <div className="px-3 py-2 bg-theme-primary border border-gray-700 rounded text-white text-xs">
           Viewport: {Math.round(viewport.x)},{Math.round(viewport.y)}
         </div>
+        
+        {editMode && (
+          <div className="px-3 py-2 bg-orange-600 border border-orange-500 rounded text-white text-xs font-bold">
+            🔧 Edit Mode
+          </div>
+        )}
       </div>
       
       {/* Performance info in development */}

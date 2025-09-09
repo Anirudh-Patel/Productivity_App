@@ -39,6 +39,12 @@ const SkillTreePage: React.FC = () => {
   const allocateNode = useSkillTreeStore(state => state.allocateNode);
   const deallocateNode = useSkillTreeStore(state => state.deallocateNode);
   const resetTree = useSkillTreeStore(state => state.resetTree);
+  const editMode = useSkillTreeStore(state => state.editMode);
+  const setEditMode = useSkillTreeStore(state => state.setEditMode);
+  const updateNodePositionLocal = useSkillTreeStore(state => state.updateNodePositionLocal);
+  const savePendingChanges = useSkillTreeStore(state => state.savePendingChanges);
+  const discardPendingChanges = useSkillTreeStore(state => state.discardPendingChanges);
+  const pendingChanges = useSkillTreeStore(state => state.pendingChanges);
   
   // Calculate stat totals directly
   const statTotals = userStats ? {
@@ -67,6 +73,7 @@ const SkillTreePage: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<SkillNode | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isAllocating, setIsAllocating] = useState(false);
+  const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [viewport, setViewport] = useState<Viewport>({
     x: 0,
     y: 0,
@@ -182,6 +189,27 @@ const SkillTreePage: React.FC = () => {
     handleNodeClick(node.node_key);
   }, [handleNodeFocus, handleNodeClick]);
 
+  // Handle saving pending changes
+  const handleSavePendingChanges = useCallback(async () => {
+    setIsSavingChanges(true);
+    try {
+      await savePendingChanges();
+      logger.info('Pending changes saved successfully', { changeCount: pendingChanges.size }, 'SkillTreePage');
+    } catch (error) {
+      logger.error('Failed to save pending changes', error, 'SkillTreePage');
+    } finally {
+      setIsSavingChanges(false);
+    }
+  }, [savePendingChanges, pendingChanges.size]);
+
+  // Handle discarding pending changes
+  const handleDiscardPendingChanges = useCallback(() => {
+    discardPendingChanges();
+    // Reload the skill tree to revert visual positions
+    loadSkillTree();
+    logger.info('Pending changes discarded', {}, 'SkillTreePage');
+  }, [discardPendingChanges, loadSkillTree]);
+
   if (skillTreeLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -244,6 +272,37 @@ const SkillTreePage: React.FC = () => {
         {/* Controls */}
         <div className="flex items-center space-x-3">
           <button
+            onClick={() => setEditMode(!editMode)}
+            className={`px-4 py-2 text-white rounded transition-colors ${
+              editMode 
+                ? 'bg-orange-600 hover:bg-orange-700' 
+                : 'bg-gray-600 hover:bg-gray-700'
+            }`}
+          >
+            {editMode ? '🔧 Exit Edit' : '✏️ Edit Mode'}
+          </button>
+
+          {editMode && (
+            <>
+              <button
+                onClick={handleSavePendingChanges}
+                disabled={pendingChanges.size === 0 || isSavingChanges}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {isSavingChanges ? '💾 Saving...' : `💾 Save Changes (${pendingChanges.size})`}
+              </button>
+              
+              <button
+                onClick={handleDiscardPendingChanges}
+                disabled={pendingChanges.size === 0}
+                className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                🔄 Discard Changes
+              </button>
+            </>
+          )}
+          
+          <button
             onClick={() => setShowResetConfirm(true)}
             disabled={userAllocations.size === 0}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
@@ -266,6 +325,8 @@ const SkillTreePage: React.FC = () => {
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             onViewportChange={handleViewportChange}
+            editMode={editMode}
+            onNodePositionChange={updateNodePositionLocal}
             className={isAllocating ? 'pointer-events-none opacity-75' : ''}
           />
           
