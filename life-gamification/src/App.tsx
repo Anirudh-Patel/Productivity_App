@@ -6,6 +6,7 @@ import Stats from './pages/Stats'
 import Equipment from './pages/Equipment'
 import Shop from './pages/Shop'
 import Settings from './pages/Settings'
+import Calendar from './pages/Calendar'
 import { ErrorBoundary } from './shared/components/ui/ErrorBoundary'
 import { ToastProvider } from './shared/components/ui/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -32,6 +33,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tasks" element={<Tasks />} />
+                <Route path="/calendar" element={<Calendar />} />
                 <Route path="/stats" element={<Stats />} />
                 <Route path="/equipment" element={<Equipment />} />
                 <Route path="/shop" element={<Shop />} />

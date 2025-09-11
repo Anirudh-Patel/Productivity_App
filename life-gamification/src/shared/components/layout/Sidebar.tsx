@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { 
   Home, 
   CheckSquare, 
+  Calendar,
   BarChart3, 
   ShoppingBag, 
   Settings,
@@ -32,6 +33,7 @@ const formatNumber = (num: number): string => {
 const navItems = [
   { path: '/', label: 'Dashboard', icon: Home },
   { path: '/tasks', label: 'Quests', icon: CheckSquare },
+  { path: '/calendar', label: 'Calendar', icon: Calendar },
   { path: '/stats', label: 'Stats', icon: BarChart3 },
   { path: '/equipment', label: 'Equipment', icon: Shield },
   { path: '/shop', label: 'Shop', icon: ShoppingBag },

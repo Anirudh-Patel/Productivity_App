@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 
 // Import avatar commands
 mod commands;
@@ -671,7 +671,7 @@ fn get_item_data(item_id: &str) -> InventoryItem {
 }
 
 // Helper function to add item to inventory
-fn add_item_to_inventory(user_id: i64, mut item: InventoryItem) {
+fn add_item_to_inventory(_user_id: i64, item: InventoryItem) {
     let mut inventory = INVENTORY_STATE.lock().unwrap();
     
     // Check if item already exists in inventory (for stacking)
@@ -981,6 +981,70 @@ async fn purchase_item(item_id: String, price: i64) -> Result<User, String> {
 }
 
 
+// Calendar Integration Commands
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarEvent {
+    pub id: String,
+    pub title: String,
+    pub start: String,
+    pub end: Option<String>,
+    pub all_day: Option<bool>,
+    pub description: Option<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarConnectionResult {
+    pub connected: bool,
+    pub calendar_id: Option<String>,
+}
+
+#[tauri::command]
+async fn connect_apple_calendar() -> Result<CalendarConnectionResult, String> {
+    // For now, return a mock connection
+    // In a real implementation, you would:
+    // 1. Request calendar permissions
+    // 2. Access EventKit on macOS
+    // 3. Return the primary calendar ID
+    
+    Ok(CalendarConnectionResult {
+        connected: true,
+        calendar_id: Some("primary".to_string()),
+    })
+}
+
+#[tauri::command]
+async fn disconnect_apple_calendar() -> Result<(), String> {
+    // Disconnect from Apple Calendar
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEvent>, String> {
+    // For now, return empty events
+    // In a real implementation, you would:
+    // 1. Use EventKit to fetch events from the specified calendar
+    // 2. Convert them to CalendarEvent structs
+    // 3. Return the list
+    
+    let _calendar_id = calendar_id; // Avoid unused parameter warning
+    
+    // Mock events for demonstration
+    let events = vec![
+        CalendarEvent {
+            id: "apple-event-1".to_string(),
+            title: "Team Meeting".to_string(),
+            start: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            end: Some((chrono::Utc::now() + chrono::Duration::hours(1)).format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            all_day: Some(false),
+            description: Some("Weekly team sync".to_string()),
+            source: "apple".to_string(),
+        },
+    ];
+    
+    Ok(events)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1006,7 +1070,10 @@ pub fn run() {
             avatar::get_user_equipment,
             avatar::equip_item,
             avatar::unequip_item,
-            avatar::get_avatar_config
+            avatar::get_avatar_config,
+            connect_apple_calendar,
+            disconnect_apple_calendar,
+            get_apple_calendar_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
