@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc, Duration};
 use rusqlite::Connection;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
+use std::fs;
+use std::path::Path;
 
 // Import avatar commands
 mod commands;
@@ -1227,6 +1229,165 @@ async fn create_achievement_popup(
     Ok(())
 }
 
+// Automated backup system
+#[tauri::command]
+async fn create_backup() -> Result<String, String> {
+    let backup_name = format!("backup_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+    let backup_path = format!("{}.db", backup_name);
+    
+    match Connection::open("game.db") {
+        Ok(connection) => {
+            // Use VACUUM INTO for consistent backup
+            match connection.execute(&format!("VACUUM INTO '{}'", backup_path), []) {
+                Ok(_) => {
+                    println!("Backup created successfully: {}", backup_path);
+                    Ok(backup_path)
+                }
+                Err(e) => Err(format!("Failed to create backup: {}", e))
+            }
+        }
+        Err(e) => Err(format!("Failed to open database: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn schedule_automatic_backups() -> Result<(), String> {
+    tokio::spawn(async {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Hourly backups
+        
+        loop {
+            interval.tick().await;
+            
+            match create_backup().await {
+                Ok(backup_path) => {
+                    println!("Automatic backup created: {}", backup_path);
+                    
+                    // Clean up old backups (keep only last 7 days)
+                    cleanup_old_backups(7).await;
+                }
+                Err(e) => {
+                    eprintln!("Failed to create automatic backup: {}", e);
+                }
+            }
+        }
+    });
+    
+    println!("Automatic backup scheduling started (hourly)");
+    Ok(())
+}
+
+async fn cleanup_old_backups(days_to_keep: u64) {
+    let cutoff_time = chrono::Utc::now() - chrono::Duration::days(days_to_keep as i64);
+    
+    if let Ok(entries) = fs::read_dir(".") {
+        for entry in entries.flatten() {
+            if let Ok(file_name) = entry.file_name().into_string() {
+                if file_name.starts_with("backup_") && file_name.ends_with(".db") {
+                    // Extract timestamp from filename
+                    if let Some(timestamp_str) = file_name.strip_prefix("backup_").and_then(|s| s.strip_suffix(".db")) {
+                        if let Ok(file_time) = chrono::NaiveDateTime::parse_from_str(timestamp_str, "%Y%m%d_%H%M%S") {
+                            let file_time_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(file_time, chrono::Utc);
+                            
+                            if file_time_utc < cutoff_time {
+                                if let Err(e) = fs::remove_file(entry.path()) {
+                                    eprintln!("Failed to remove old backup {}: {}", file_name, e);
+                                } else {
+                                    println!("Removed old backup: {}", file_name);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn restore_from_backup(backup_path: String) -> Result<(), String> {
+    if !Path::new(&backup_path).exists() {
+        return Err("Backup file does not exist".to_string());
+    }
+    
+    // Create a backup of current database before restoring
+    let current_backup = format!("pre_restore_backup_{}.db", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+    if let Err(e) = fs::copy("game.db", &current_backup) {
+        return Err(format!("Failed to backup current database: {}", e));
+    }
+    
+    // Restore from backup
+    match fs::copy(&backup_path, "game.db") {
+        Ok(_) => {
+            println!("Database restored from backup: {}", backup_path);
+            println!("Previous database backed up as: {}", current_backup);
+            Ok(())
+        }
+        Err(e) => {
+            // Try to restore the previous backup if restore failed
+            let _ = fs::copy(&current_backup, "game.db");
+            Err(format!("Failed to restore from backup: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn list_available_backups() -> Result<Vec<String>, String> {
+    let mut backups = Vec::new();
+    
+    if let Ok(entries) = fs::read_dir(".") {
+        for entry in entries.flatten() {
+            if let Ok(file_name) = entry.file_name().into_string() {
+                if file_name.starts_with("backup_") && file_name.ends_with(".db") {
+                    backups.push(file_name);
+                }
+            }
+        }
+    }
+    
+    // Sort by filename (which includes timestamp)
+    backups.sort();
+    backups.reverse(); // Most recent first
+    
+    Ok(backups)
+}
+
+#[tauri::command]
+async fn get_backup_info(backup_path: String) -> Result<serde_json::Value, String> {
+    if !Path::new(&backup_path).exists() {
+        return Err("Backup file does not exist".to_string());
+    }
+    
+    match fs::metadata(&backup_path) {
+        Ok(metadata) => {
+            let size = metadata.len();
+            let modified = metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            
+            // Try to get record counts from backup
+            let mut record_counts = serde_json::Map::new();
+            
+            if let Ok(backup_conn) = Connection::open(&backup_path) {
+                let tables = ["users", "tasks", "achievements", "user_achievements", "inventory", "daily_stats"];
+                
+                for table in &tables {
+                    if let Ok(mut stmt) = backup_conn.prepare(&format!("SELECT COUNT(*) FROM {}", table)) {
+                        if let Ok(count_result) = stmt.query_row([], |row| row.get::<_, i64>(0)) {
+                            record_counts.insert(table.to_string(), serde_json::Value::Number(serde_json::Number::from(count_result)));
+                        }
+                    }
+                }
+            }
+            
+            Ok(serde_json::json!({
+                "path": backup_path,
+                "size_bytes": size,
+                "modified_time": modified.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                "record_counts": record_counts
+            }))
+        }
+        Err(e) => Err(format!("Failed to get backup info: {}", e))
+    }
+}
+
 #[tauri::command]
 async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEvent>, String> {
     // For now, return empty events
@@ -1265,6 +1426,13 @@ pub fn run() {
                 } else {
                     println!("Database initialized successfully with performance optimizations");
                 }
+                
+                // Start automatic backup scheduling
+                if let Err(e) = schedule_automatic_backups().await {
+                    eprintln!("Failed to start automatic backups: {}", e);
+                } else {
+                    println!("Automatic backup system started");
+                }
             });
             Ok(())
         })
@@ -1297,7 +1465,12 @@ pub fn run() {
             disconnect_apple_calendar,
             get_apple_calendar_events,
             initialize_database,
-            create_achievement_popup
+            create_achievement_popup,
+            create_backup,
+            schedule_automatic_backups,
+            restore_from_backup,
+            list_available_backups,
+            get_backup_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

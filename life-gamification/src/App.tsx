@@ -15,6 +15,7 @@ import { VisualEffectsProvider, EffectsTestPanel } from './shared/components/ui/
 import { AudioProvider } from './shared/components/audio/AudioManager'
 import { LayoutDebugger } from './shared/components/debug/LayoutDebugger'
 import KeyboardShortcutsModal from './shared/components/ui/KeyboardShortcutsModal'
+import { CommandPalette, useCommandPalette } from './shared/components/ui/CommandPalette'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { logger } from './utils/logger'
 import { startMemoryMonitoring } from './utils/performance'
@@ -26,6 +27,9 @@ import './App.css'
 function AppContent() {
   // Initialize keyboard shortcuts (now inside Router context)
   useKeyboardShortcuts([], { enabled: true, showNotifications: false });
+  
+  // Initialize command palette
+  const { isOpen: commandPaletteOpen, setIsOpen: setCommandPaletteOpen } = useCommandPalette();
 
   return (
     <>
@@ -40,8 +44,12 @@ function AppContent() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
-      {/* KeyboardShortcutsModal moved inside Router context */}
+      {/* Global UI Components */}
       <KeyboardShortcutsModal />
+      <CommandPalette 
+        isOpen={commandPaletteOpen} 
+        onOpenChange={setCommandPaletteOpen} 
+      />
       {process.env.NODE_ENV === 'development' && <LayoutDebugger />}
       {process.env.NODE_ENV === 'development' && <EffectsTestPanel />}
     </>

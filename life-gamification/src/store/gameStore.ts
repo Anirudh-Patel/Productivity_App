@@ -15,6 +15,7 @@ import { withErrorHandling } from '../utils/errorHandler';
 import { PerformanceMonitor } from '../utils/performance';
 import { notificationService } from '../services/notificationService';
 import { rewardSystem, rollReward, type Reward } from '../services/rewardService';
+import { smartNotificationScheduler, scheduleTaskReminder } from '../services/smartNotificationScheduler';
 
 export const useGameStore = create<GameState>((set, get) => ({
   user: null,
@@ -118,6 +119,32 @@ export const useGameStore = create<GameState>((set, get) => ({
               active: [newTask, ...state.tasks.active]
             }
           }));
+
+          // Schedule smart notifications for the task if it has a due date
+          const currentUser = get().user;
+          if (currentUser && taskData.due_date) {
+            try {
+              const dueDate = new Date(taskData.due_date);
+              const complexity = taskData.difficulty ? 
+                (taskData.difficulty <= 3 ? 'low' : taskData.difficulty <= 7 ? 'medium' : 'high') : 'medium';
+              
+              // Schedule reminder 1 hour before due date
+              const reminderTime = new Date(dueDate.getTime() - 60 * 60 * 1000);
+              
+              await scheduleTaskReminder(
+                currentUser.id,
+                newTask.id,
+                newTask.title,
+                reminderTime,
+                complexity,
+                30 // estimated duration
+              );
+              
+              console.log(`Scheduled smart reminder for task: ${newTask.title}`);
+            } catch (error) {
+              console.error('Failed to schedule task reminder:', error);
+            }
+          }
 
           return newTask;
         } catch (error) {
