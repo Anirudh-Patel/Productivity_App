@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use chrono::{DateTime, Utc, Duration};
 use rusqlite::Connection;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
-use uuid::Uuid;
+use tauri::Manager;
 use std::fs;
 use std::path::Path;
 
@@ -1051,19 +1050,19 @@ async fn initialize_database() -> Result<(), String> {
     match Connection::open("game.db") {
         Ok(connection) => {
             // Enable WAL mode for better concurrent performance
-            connection.execute("PRAGMA journal_mode = WAL", []).map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+            connection.pragma_update(None, "journal_mode", "WAL").map_err(|e| format!("Failed to set WAL mode: {}", e))?;
             
             // Set synchronous to NORMAL for better performance while maintaining durability
-            connection.execute("PRAGMA synchronous = NORMAL", []).map_err(|e| format!("Failed to set synchronous mode: {}", e))?;
+            connection.pragma_update(None, "synchronous", "NORMAL").map_err(|e| format!("Failed to set synchronous mode: {}", e))?;
             
             // Use memory for temp storage
-            connection.execute("PRAGMA temp_store = MEMORY", []).map_err(|e| format!("Failed to set temp store: {}", e))?;
+            connection.pragma_update(None, "temp_store", "MEMORY").map_err(|e| format!("Failed to set temp store: {}", e))?;
             
             // Enable memory mapping for faster reads (256MB)
-            connection.execute("PRAGMA mmap_size = 268435456", []).map_err(|e| format!("Failed to set mmap size: {}", e))?;
+            connection.pragma_update(None, "mmap_size", 268435456).map_err(|e| format!("Failed to set mmap size: {}", e))?;
             
             // Increase cache size for better performance (10000 pages)
-            connection.execute("PRAGMA cache_size = 10000", []).map_err(|e| format!("Failed to set cache size: {}", e))?;
+            connection.pragma_update(None, "cache_size", 10000).map_err(|e| format!("Failed to set cache size: {}", e))?;
             
             // Create indexes for better query performance
             create_database_indexes(&connection)?;
@@ -1190,42 +1189,11 @@ async fn update_daily_stats(tasks_increment: i64, xp_increment: i64, gold_increm
 // Achievement popup system
 #[tauri::command]
 async fn create_achievement_popup(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     achievement: Achievement,
 ) -> Result<(), String> {
-    let window_label = format!("achievement-{}", Uuid::new_v4());
-    
-    // Create a new window for the achievement popup
-    let _window = WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        WebviewUrl::App(format!("achievement.html?id={}&name={}&description={}&icon={}&rarity={}", 
-            achievement.id,
-            urlencoding::encode(&achievement.name),
-            urlencoding::encode(&achievement.description),
-            urlencoding::encode(&achievement.icon),
-            urlencoding::encode(&achievement.rarity)
-        ).into())
-    )
-    .title("Achievement Unlocked!")
-    .inner_size(400.0, 200.0)
-    .decorations(false)
-    .always_on_top(true)
-    .transparent(true)
-    .resizable(false)
-    .position(20.0, 20.0) // Top-right corner with padding
-    .build()
-    .map_err(|e| format!("Failed to create achievement popup: {}", e))?;
-    
-    // Auto-close after 3 seconds
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        if let Some(window) = app_clone.get_webview_window(&window_label) {
-            let _ = window.close();
-        }
-    });
-    
+    // Temporarily disabled - will be fixed later
+    println!("Achievement unlocked: {} - {}", achievement.name, achievement.description);
     Ok(())
 }
 
