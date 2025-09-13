@@ -107,6 +107,8 @@ export interface UserPreferences {
     experimentalFeatures: boolean;
     betaUpdates: boolean;
     verboseLogging: boolean;
+    showLayoutDebugger: boolean;
+    showEffectsPanel: boolean;
     customCSS?: string;
     shortcuts: Record<string, string>;
   };
@@ -224,6 +226,8 @@ const defaultPreferences: UserPreferences = {
     experimentalFeatures: false,
     betaUpdates: false,
     verboseLogging: false,
+    showLayoutDebugger: false,
+    showEffectsPanel: false,
     shortcuts: {}
   }
 };

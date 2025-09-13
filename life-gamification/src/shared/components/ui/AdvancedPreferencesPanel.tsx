@@ -678,6 +678,38 @@ const AdvancedPreferencesPanel = ({ className = '' }: AdvancedPreferencesPanelPr
               <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
             </label>
           </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="font-medium">Layout Debugger</label>
+              <p className="text-sm text-gray-400">Show layout debugging overlay (dev mode only)</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={advanced.showLayoutDebugger}
+                onChange={(e) => updateAdvanced({ showLayoutDebugger: e.target.checked })}
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="font-medium">Visual Effects Test Panel</label>
+              <p className="text-sm text-gray-400">Show effects test panel (dev mode only)</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={advanced.showEffectsPanel}
+                onChange={(e) => updateAdvanced({ showEffectsPanel: e.target.checked })}
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
+            </label>
+          </div>
         </div>
       </div>
     </div>

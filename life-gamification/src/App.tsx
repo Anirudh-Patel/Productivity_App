@@ -17,6 +17,7 @@ import { LayoutDebugger } from './shared/components/debug/LayoutDebugger'
 import KeyboardShortcutsModal from './shared/components/ui/KeyboardShortcutsModal'
 import { CommandPalette, useCommandPalette } from './shared/components/ui/CommandPalette'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useAdvancedPreferences } from './store/preferencesStore'
 import { logger } from './utils/logger'
 import { startMemoryMonitoring } from './utils/performance'
 import { initializeAccessibility } from './utils/accessibility'
@@ -30,6 +31,9 @@ function AppContent() {
   
   // Initialize command palette
   const { isOpen: commandPaletteOpen, setIsOpen: setCommandPaletteOpen } = useCommandPalette();
+  
+  // Get advanced preferences for debugging tools
+  const { showLayoutDebugger, showEffectsPanel } = useAdvancedPreferences();
 
   return (
     <>
@@ -50,8 +54,8 @@ function AppContent() {
         isOpen={commandPaletteOpen} 
         onOpenChange={setCommandPaletteOpen} 
       />
-      {process.env.NODE_ENV === 'development' && <LayoutDebugger />}
-      {process.env.NODE_ENV === 'development' && <EffectsTestPanel />}
+      {process.env.NODE_ENV === 'development' && showLayoutDebugger && <LayoutDebugger />}
+      {process.env.NODE_ENV === 'development' && showEffectsPanel && <EffectsTestPanel />}
     </>
   )
 }

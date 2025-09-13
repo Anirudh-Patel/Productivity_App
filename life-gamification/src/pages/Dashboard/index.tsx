@@ -4,7 +4,6 @@ import { useGameStore } from '../../store/gameStore'
 import { analyzeUserPerformance, generateDifficultyRecommendation } from '../../utils/difficultyAdjustment'
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents'
 import { XPProgressChart, TaskCategoryChart, ActivityHeatmap } from '../../shared/components/ui/Charts'
-import LiveStatsWidget from '../../shared/components/ui/LiveStatsWidget'
 import QuickStartWidget from '../../shared/components/ui/QuickStartWidget'
 import AchievementTracker from '../../shared/components/ui/AchievementTracker'
 import NotificationDemo from '../../shared/components/ui/NotificationDemo'
@@ -73,8 +72,6 @@ const Dashboard = () => {
         </div>
       </FadeIn>
 
-      {/* Live Stats Widget */}
-      <LiveStatsWidget />
 
       {/* Dynamic Difficulty Insights */}
       <FadeIn delay={400}>
