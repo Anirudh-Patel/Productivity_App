@@ -10,14 +10,53 @@ import Calendar from './pages/Calendar'
 import { ErrorBoundary } from './shared/components/ui/ErrorBoundary'
 import { ToastProvider } from './shared/components/ui/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { NotificationProvider } from './providers/NotificationProvider'
+import { VisualEffectsProvider, EffectsTestPanel } from './shared/components/ui/VisualEffectsManager'
+import { AudioProvider } from './shared/components/audio/AudioManager'
 import { LayoutDebugger } from './shared/components/debug/LayoutDebugger'
+import KeyboardShortcutsModal from './shared/components/ui/KeyboardShortcutsModal'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { logger } from './utils/logger'
 import { startMemoryMonitoring } from './utils/performance'
+import { initializeAccessibility } from './utils/accessibility'
+import { useEffect } from 'react'
 import './App.css'
+
+// Component to initialize features inside Router context
+function AppContent() {
+  // Initialize keyboard shortcuts (now inside Router context)
+  useKeyboardShortcuts([], { enabled: true, showNotifications: false });
+
+  return (
+    <>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/stats" element={<Stats />} />
+          <Route path="/equipment" element={<Equipment />} />
+          <Route path="/shop" element={<Shop />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Layout>
+      {/* KeyboardShortcutsModal moved inside Router context */}
+      <KeyboardShortcutsModal />
+      {process.env.NODE_ENV === 'development' && <LayoutDebugger />}
+      {process.env.NODE_ENV === 'development' && <EffectsTestPanel />}
+    </>
+  )
+}
 
 function App() {
   // Log app initialization
   logger.info('App initialized', { timestamp: new Date().toISOString() }, 'App');
+  
+  // Initialize accessibility features
+  useEffect(() => {
+    initializeAccessibility();
+    logger.info('Accessibility features initialized', {}, 'App');
+  }, []);
   
   // Start memory monitoring in development
   if (process.env.NODE_ENV === 'development') {
@@ -27,22 +66,17 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <ToastProvider>
-          <HashRouter>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/tasks" element={<Tasks />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/stats" element={<Stats />} />
-                <Route path="/equipment" element={<Equipment />} />
-                <Route path="/shop" element={<Shop />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </Layout>
-          </HashRouter>
-          {process.env.NODE_ENV === 'development' && <LayoutDebugger />}
-        </ToastProvider>
+        <AudioProvider>
+          <VisualEffectsProvider>
+            <ToastProvider>
+              <NotificationProvider>
+                <HashRouter>
+                  <AppContent />
+                </HashRouter>
+              </NotificationProvider>
+            </ToastProvider>
+          </VisualEffectsProvider>
+        </AudioProvider>
       </ThemeProvider>
     </ErrorBoundary>
   )

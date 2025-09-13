@@ -15,6 +15,9 @@ import { logger, logUserAction } from '../../utils/logger';
 import { useRenderPerformance, PerformanceMonitor, useDebounce } from '../../utils/performance';
 import { formatRecurrencePattern, getRecurringQuestIcon, isQuestDueToday } from '../../utils/recurringQuests';
 import { QuestChains } from '../../shared/components/ui/QuestChains';
+import AdvancedTaskManager from '../../shared/components/ui/AdvancedTaskManager';
+import TaskQuickActions from '../../shared/components/ui/TaskQuickActions';
+import { useGameEffects } from '../../shared/components/ui/VisualEffectsManager';
 
 const Tasks = () => {
   // Performance monitoring
@@ -24,13 +27,14 @@ const Tasks = () => {
   const [searchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === 'true');
   const toast = useToast();
+  const gameEffects = useGameEffects();
   const [progressModal, setProgressModal] = useState<{ isOpen: boolean; task: Task | null }>({ 
     isOpen: false, 
     task: null 
   });
   const [loadingTaskId, setLoadingTaskId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>('active');
-  const [activeTab, setActiveTab] = useState<'quests' | 'chains'>('quests');
+  const [activeTab, setActiveTab] = useState<'quests' | 'chains' | 'advanced' | 'dashboard'>('quests');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Debounce search term to improve performance
@@ -68,7 +72,23 @@ const Tasks = () => {
       `completeTask_${taskId}`,
       async () => {
         try {
+          const task = [...tasks.active, ...tasks.completed].find(t => t.id === taskId);
           await completeTask(taskId);
+          
+          // Trigger visual effects
+          if (task) {
+            gameEffects.triggerTaskCompletion(
+              task.base_experience_reward || 50,
+              task.title
+            );
+            
+            // Check if this completion triggers a level up (mock logic)
+            const currentLevel = user?.level || 1;
+            if (Math.random() < 0.1) { // 10% chance for demo purposes
+              gameEffects.triggerLevelUp(currentLevel + 1, currentLevel, task.base_experience_reward || 50);
+            }
+          }
+          
           toast.success('Quest completed!', 'XP and gold have been awarded.');
           logger.info('Task completed successfully', { taskId }, 'Tasks');
         } catch (error: any) {
@@ -81,6 +101,43 @@ const Tasks = () => {
     );
     
     setLoadingTaskId(null);
+  };
+
+  // Handle bulk task actions
+  const handleBulkTaskAction = async (action: string, taskIds: number[]) => {
+    logUserAction('bulkTaskAction', { action, taskIds }, 'Tasks');
+    
+    try {
+      // Mock implementation - replace with actual bulk operations
+      switch (action) {
+        case 'complete':
+          for (const taskId of taskIds) {
+            await completeTask(taskId);
+          }
+          break;
+        case 'delete':
+          // Implement bulk delete
+          break;
+        case 'archive':
+          // Implement bulk archive
+          break;
+        default:
+          break;
+      }
+    } catch (error: any) {
+      logger.error('Bulk action failed', { error: error.message, action, taskIds }, 'Tasks');
+      throw error;
+    }
+  };
+
+  // Handle quick task creation from templates
+  const handleQuickTaskCreate = async (taskTemplate: Partial<Task>) => {
+    try {
+      await createTask(taskTemplate);
+      toast.success('Task created!', 'Your new task has been added to your quest list');
+    } catch (error: any) {
+      toast.error('Failed to create task', error.userMessage || 'Please try again');
+    }
   };
 
   // Filter and search tasks with performance consideration
@@ -119,6 +176,16 @@ const Tasks = () => {
       {/* Tab Navigation */}
       <div className="flex gap-4 mb-6">
         <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'dashboard'
+              ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/30'
+              : 'text-gray-400 hover:text-theme-fg'
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
           onClick={() => setActiveTab('quests')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             activeTab === 'quests'
@@ -137,6 +204,16 @@ const Tasks = () => {
           }`}
         >
           Quest Chains
+        </button>
+        <button
+          onClick={() => setActiveTab('advanced')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'advanced'
+              ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/30'
+              : 'text-gray-400 hover:text-theme-fg'
+          }`}
+        >
+          Advanced Manager
         </button>
       </div>
 
@@ -162,6 +239,13 @@ const Tasks = () => {
         </>
       )}
 
+      {/* Dashboard Tab Content */}
+      {activeTab === 'dashboard' && (
+        <TaskQuickActions
+          onQuickCreate={handleQuickTaskCreate}
+        />
+      )}
+
       {/* Quest Chains Tab Content */}
       {activeTab === 'chains' && (
         <QuestChains
@@ -172,6 +256,15 @@ const Tasks = () => {
               setActiveTab('quests'); // Switch back to quests tab
             });
           }}
+        />
+      )}
+
+      {/* Advanced Task Manager Tab Content */}
+      {activeTab === 'advanced' && (
+        <AdvancedTaskManager
+          tasks={[...tasks.active, ...tasks.completed]}
+          onTaskAction={handleBulkTaskAction}
+          onRefresh={fetchTasks}
         />
       )}
 

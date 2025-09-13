@@ -63,20 +63,21 @@ export interface Task {
   title: string;
   description?: string;
   category: string;
-  difficulty: number;
+  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
   base_experience_reward: number;
   gold_reward: number;
   due_date?: string;
   status: 'active' | 'completed' | 'failed' | 'archived';
-  priority: number;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   created_at: string;
   completed_at?: string;
-  task_type: 'standard' | 'goal' | 'recurring';
+  task_type: 'simple' | 'goal' | 'recurring';
   goal_target?: number;
   goal_current?: number;
   goal_unit?: string;
+  tags?: string[];
   // Recurring quest fields
-  recurrence_pattern?: RecurrencePattern;
+  recurrence_pattern?: string | RecurrencePattern;
   next_due_date?: string;
   current_streak?: number;
   best_streak?: number;
@@ -85,6 +86,8 @@ export interface Task {
   chain_id?: string;
   chain_order?: number;
   is_chain_completed?: boolean;
+  // Additional properties for advanced task management
+  experience?: number; // Legacy support
 }
 
 export interface CreateTaskRequest {

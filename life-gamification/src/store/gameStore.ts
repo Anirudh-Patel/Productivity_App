@@ -13,6 +13,7 @@ import type {
 import { logger, logUserAction, logPerformance } from '../utils/logger';
 import { withErrorHandling } from '../utils/errorHandler';
 import { PerformanceMonitor } from '../utils/performance';
+import { notificationService } from '../services/notificationService';
 
 export const useGameStore = create<GameState>((set, get) => ({
   user: null,
@@ -132,6 +133,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       `completeTask_store_${taskId}`,
       async () => {
         try {
+          const previousUser = get().user;
+          
+          // Get the task details BEFORE completing it so we have the XP amount
+          const taskToComplete = [...get().tasks.active, ...get().tasks.completed].find(t => t.id === taskId);
+          console.log('taskToComplete before completion:', taskToComplete);
+          
           const completedTask: Task = await invoke('complete_task', { taskId });
           
           set(state => ({
@@ -143,10 +150,36 @@ export const useGameStore = create<GameState>((set, get) => ({
           }));
 
           // Refresh user data to get updated XP/gold
-          get().fetchUser();
+          await get().fetchUser();
           
           // Check for new achievements
-          get().checkAchievements();
+          const newAchievements = await get().checkAchievements();
+          
+          // Trigger notifications
+          const currentUser = get().user;
+          if (currentUser && previousUser) {
+            // Use the original task's base experience reward (more reliable)
+            const xpGained = taskToComplete?.base_experience_reward || completedTask.base_experience_reward || 0;
+            console.log('xpGained being sent to notification:', xpGained);
+            console.log('Source: taskToComplete?.base_experience_reward:', taskToComplete?.base_experience_reward);
+            console.log('Fallback: completedTask.base_experience_reward:', completedTask.base_experience_reward);
+            
+            // Notify task completion with rewards
+            notificationService.notifyTaskCompletionWithRewards(
+              completedTask.title,
+              xpGained,
+              newAchievements.map(achievement => ({
+                name: achievement.name,
+                description: achievement.description,
+                rarity: achievement.rarity as 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+              }))
+            );
+            
+            // Check for level up
+            if (currentUser.level > previousUser.level) {
+              notificationService.notifyLevelUp(currentUser.level, previousUser.level);
+            }
+          }
           
         } catch (error) {
           console.error('Failed to complete task:', error);
@@ -254,6 +287,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       
       // Refresh inventory to show new item
       get().fetchInventory();
+      
+      // Trigger purchase notification
+      notificationService.notifyItemReceived(itemId, 'common'); // You might want to get rarity from item data
       
       logger.info('Item purchased successfully', { itemId, price }, 'GameStore');
       return updatedUser;
@@ -394,6 +430,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       
       // Refresh buffs list
       get().getActiveBuffs();
+      
+      // Trigger buff notification
+      notificationService.notifyBuffApplied(buffType, durationMinutes);
       
       logger.info('Buff applied successfully', { buffType, value, duration: durationMinutes }, 'GameStore');
       return buff;

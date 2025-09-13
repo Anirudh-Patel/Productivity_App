@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor } from 'lucide-react';
+import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGameStore } from '../../store/gameStore';
 import { useRenderPerformance } from '../../utils/performance';
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents';
 import { AvatarSelector } from '../../shared/components/ui/AvatarSelector';
+import DataExportModal from '../../shared/components/ui/DataExportModal';
+import AdvancedPreferencesPanel from '../../shared/components/ui/AdvancedPreferencesPanel';
 
 const Settings = () => {
   useRenderPerformance('Settings', process.env.NODE_ENV === 'development');
@@ -13,10 +15,13 @@ const Settings = () => {
   const { user } = useGameStore();
   const [activeSection, setActiveSection] = useState('appearance');
   const [selectedAvatar, setSelectedAvatar] = useState('hunter-1');
+  const [isDataExportModalOpen, setIsDataExportModalOpen] = useState(false);
 
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'data', label: 'Data Management', icon: Database },
+    { id: 'preferences', label: 'Preferences', icon: Monitor },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy', icon: Shield },
     { id: 'advanced', label: 'Advanced', icon: Monitor },
@@ -198,8 +203,178 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* Data Management Section */}
+          {activeSection === 'data' && (
+            <FadeIn delay={100}>
+              <div className="space-y-6">
+                {/* Export/Import */}
+                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Database className="w-5 h-5" />
+                    Data Export & Import
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-6">
+                    Backup your progress and settings, or import data from another device
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Export Card */}
+                    <div className="bg-theme-bg rounded-lg border border-gray-700 p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-green-500/20 rounded-lg">
+                          <Database className="w-5 h-5 text-green-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold">Export Data</h4>
+                          <p className="text-sm text-gray-400">Download your data as backup</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3 mb-4">
+                        <div className="flex justify-between text-sm">
+                          <span>Format Options:</span>
+                          <span className="text-gray-400">JSON, CSV, XML</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Data Types:</span>
+                          <span className="text-gray-400">All categories</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsDataExportModalOpen(true)}
+                        className="w-full bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg px-4 py-2 transition-colors"
+                      >
+                        Export Data
+                      </button>
+                    </div>
+
+                    {/* Import Card */}
+                    <div className="bg-theme-bg rounded-lg border border-gray-700 p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                          <Database className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold">Import Data</h4>
+                          <p className="text-sm text-gray-400">Restore data from backup</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3 mb-4">
+                        <div className="flex justify-between text-sm">
+                          <span>Supported:</span>
+                          <span className="text-gray-400">JSON, CSV, XML</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Merge Mode:</span>
+                          <span className="text-gray-400">Safe import</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsDataExportModalOpen(true)}
+                        className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg px-4 py-2 transition-colors"
+                      >
+                        Import Data
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Storage Usage */}
+                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold mb-4">Storage Usage</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-3 bg-theme-bg rounded-lg">
+                      <div>
+                        <p className="font-medium">Tasks & Quests</p>
+                        <p className="text-sm text-gray-400">Active and completed tasks</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm">2.4 MB</p>
+                        <p className="text-xs text-gray-400">1,247 records</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-theme-bg rounded-lg">
+                      <div>
+                        <p className="font-medium">Achievements</p>
+                        <p className="text-sm text-gray-400">Unlocked achievements and progress</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm">512 KB</p>
+                        <p className="text-xs text-gray-400">89 records</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-theme-bg rounded-lg">
+                      <div>
+                        <p className="font-medium">Inventory & Equipment</p>
+                        <p className="text-sm text-gray-400">Items and gear</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm">1.1 MB</p>
+                        <p className="text-xs text-gray-400">345 records</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-theme-bg rounded-lg">
+                      <div>
+                        <p className="font-medium">Calendar Events</p>
+                        <p className="text-sm text-gray-400">Scheduled events and reminders</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm">768 KB</p>
+                        <p className="text-xs text-gray-400">156 records</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-4 border-t border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <p className="font-semibold">Total Storage Used</p>
+                      <p className="font-mono text-lg text-theme-accent">4.8 MB</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data Privacy */}
+                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold mb-4">Data Privacy</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">Analytics Collection</p>
+                        <p className="text-sm text-gray-400">Anonymous usage statistics</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" defaultChecked />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
+                      </label>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">Auto Backup</p>
+                        <p className="text-sm text-gray-400">Automatically backup data locally</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" defaultChecked />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* Preferences Section */}
+          {activeSection === 'preferences' && (
+            <FadeIn delay={100}>
+              <AdvancedPreferencesPanel className="p-0" />
+            </FadeIn>
+          )}
+
           {/* Other sections placeholder */}
-          {!['appearance', 'profile'].includes(activeSection) && (
+          {!['appearance', 'profile', 'data', 'preferences'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">
@@ -211,6 +386,12 @@ const Settings = () => {
           )}
         </div>
       </div>
+      
+      {/* Data Export Modal */}
+      <DataExportModal 
+        isOpen={isDataExportModalOpen}
+        onClose={() => setIsDataExportModalOpen(false)}
+      />
     </div>
   )
 }

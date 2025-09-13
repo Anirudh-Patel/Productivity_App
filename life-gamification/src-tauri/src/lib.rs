@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use chrono::DateTime;
+use chrono::{DateTime, Utc, Duration};
+use rusqlite::Connection;
 
 // Import avatar commands
 mod commands;
@@ -394,39 +395,49 @@ async fn complete_task(task_id: i64) -> Result<Task, String> {
     drop(tasks_guard);
     
     // Award XP and gold to user with stat bonuses AND buff effects
-    let mut user_guard = USER_STATE.lock().unwrap();
-    if let Some(ref mut user) = user_guard.as_mut() {
-        // Get buffed stats for calculations
-        let (_, buffed_int, _, _, buffed_luck) = apply_stat_buffs_to_user_stats(user);
-        
-        // Calculate stat bonuses with buffed stats
-        let int_bonus = buffed_int as f64 * 0.02; // 2% XP bonus per INT point
-        let luck_bonus = buffed_luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
-        
-        // Apply stat bonuses to base rewards
-        let stat_xp_reward = (task.base_experience_reward as f64 * (1.0 + int_bonus)) as i64;
-        let stat_gold_reward = (task.gold_reward as f64 * (1.0 + luck_bonus)) as i64;
-        
-        // Apply buff multipliers on top of stat bonuses
-        let (final_xp, final_gold) = apply_buff_effects_to_rewards(stat_xp_reward, stat_gold_reward);
-        
-        user.experience_points += final_xp;
-        user.gold += final_gold;
-        
-        println!("Task completed! Base XP: {} -> {} (with stat+buff bonuses), Base Gold: {} -> {} (with stat+buff bonuses)", 
-            task.base_experience_reward, final_xp, task.gold_reward, final_gold);
-        
-        // Recalculate level and XP to next level
-        let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
-        let level_up = new_level > user.level;
-        user.level = new_level;
-        user.experience_to_next_level = xp_to_next;
-        
-        // Level up bonus - restore health
-        if level_up {
-            user.current_health = user.max_health;
+    let (final_xp, final_gold) = {
+        let mut user_guard = USER_STATE.lock().unwrap();
+        if let Some(ref mut user) = user_guard.as_mut() {
+            // Get buffed stats for calculations
+            let (_, buffed_int, _, _, buffed_luck) = apply_stat_buffs_to_user_stats(user);
+            
+            // Calculate stat bonuses with buffed stats
+            let int_bonus = buffed_int as f64 * 0.02; // 2% XP bonus per INT point
+            let luck_bonus = buffed_luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
+            
+            // Apply stat bonuses to base rewards
+            let stat_xp_reward = (task.base_experience_reward as f64 * (1.0 + int_bonus)) as i64;
+            let stat_gold_reward = (task.gold_reward as f64 * (1.0 + luck_bonus)) as i64;
+            
+            // Apply buff multipliers on top of stat bonuses
+            let (final_xp, final_gold) = apply_buff_effects_to_rewards(stat_xp_reward, stat_gold_reward);
+            
+            user.experience_points += final_xp;
+            user.gold += final_gold;
+            
+            println!("Task completed! Base XP: {} -> {} (with stat+buff bonuses), Base Gold: {} -> {} (with stat+buff bonuses)", 
+                task.base_experience_reward, final_xp, task.gold_reward, final_gold);
+            
+            // Recalculate level and XP to next level
+            let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
+            let level_up = new_level > user.level;
+            user.level = new_level;
+            user.experience_to_next_level = xp_to_next;
+            
+            // Level up bonus - restore health
+            if level_up {
+                user.current_health = user.max_health;
+            }
+            
+            (final_xp, final_gold)
+        } else {
+            (0, 0) // Default values if user is None
         }
-    }
+    };
+    
+    // Update daily stats (temporarily disabled due to async complexity)
+    // TODO: Re-enable with proper thread-safe approach
+    // let _ = update_daily_stats(1, final_xp, final_gold).await;
     
     Ok(task)
 }
@@ -530,7 +541,7 @@ async fn check_achievements() -> Result<Vec<Achievement>, String> {
                         user_id: user.id,
                         achievement_id: achievement.id,
                         achievement: achievement.clone(),
-                        unlocked_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                        unlocked_at: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
                     };
                     
                     user_achievements.push(new_user_achievement);
@@ -568,7 +579,7 @@ async fn check_achievements() -> Result<Vec<Achievement>, String> {
 
 // Helper function to get item data by ID
 fn get_item_data(item_id: &str) -> InventoryItem {
-    let current_time = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let current_time = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     
     match item_id {
         "health_potion_small" => InventoryItem {
@@ -773,11 +784,11 @@ fn apply_item_effect(user: &mut User, effect: &str) -> Result<(), String> {
 
 // Helper function to create buffs
 fn create_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) {
-    let now = chrono::Utc::now();
-    let expires_at = now + chrono::Duration::minutes(duration_minutes);
+    let now = Utc::now();
+    let expires_at = now + Duration::minutes(duration_minutes);
     
     let buff = Buff {
-        id: format!("buff_{}", chrono::Utc::now().timestamp_millis()),
+        id: format!("buff_{}", Utc::now().timestamp_millis()),
         name: format!("{} Boost", buff_type),
         buff_type,
         value,
@@ -845,7 +856,7 @@ async fn unequip_title() -> Result<User, String> {
 // Buff management functions
 fn clean_expired_buffs() {
     let mut buffs = ACTIVE_BUFFS.lock().unwrap();
-    let now = chrono::Utc::now();
+    let now = Utc::now();
     
     buffs.retain(|buff| {
         if let Ok(expires_at) = DateTime::parse_from_rfc3339(&buff.expires_at) {
@@ -914,11 +925,11 @@ async fn get_active_buffs() -> Result<Vec<Buff>, String> {
 
 #[tauri::command]
 async fn apply_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Result<Buff, String> {
-    let now = chrono::Utc::now();
-    let expires_at = now + chrono::Duration::minutes(duration_minutes);
+    let now = Utc::now();
+    let expires_at = now + Duration::minutes(duration_minutes);
     
     let buff = Buff {
-        id: format!("buff_{}", chrono::Utc::now().timestamp_millis()),
+        id: format!("buff_{}", Utc::now().timestamp_millis()),
         name: format!("{} Boost", buff_type),
         buff_type,
         value,
@@ -999,6 +1010,17 @@ pub struct CalendarConnectionResult {
     pub calendar_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyStats {
+    pub id: Option<i64>,
+    pub user_id: i64,
+    pub date: String, // Format: YYYY-MM-DD
+    pub tasks_completed: i64,
+    pub xp_earned: i64,
+    pub gold_earned: i64,
+    pub productivity_score: f64,
+}
+
 #[tauri::command]
 async fn connect_apple_calendar() -> Result<CalendarConnectionResult, String> {
     // For now, return a mock connection
@@ -1020,6 +1042,95 @@ async fn disconnect_apple_calendar() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn get_daily_stats() -> Result<DailyStats, String> {
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    
+    match Connection::open("game.db") {
+        Ok(connection) => {
+            let mut stats = DailyStats {
+                id: None,
+                user_id: 1, // Assuming user ID 1 for now
+                date: today.clone(),
+                tasks_completed: 0,
+                xp_earned: 0,
+                gold_earned: 0,
+                productivity_score: 0.0,
+            };
+            
+            // Try to get existing stats for today
+            let query = "SELECT id, tasks_completed, xp_earned, gold_earned, productivity_score 
+                        FROM daily_stats WHERE user_id = 1 AND date = ?";
+            
+            if let Ok(mut statement) = connection.prepare(query) {
+                let result = statement.query_row([&today], |row| {
+                    Ok(DailyStats {
+                        id: Some(row.get(0)?),
+                        user_id: 1,
+                        date: today.clone(),
+                        tasks_completed: row.get(1)?,
+                        xp_earned: row.get(2)?,
+                        gold_earned: row.get(3)?,
+                        productivity_score: row.get(4)?,
+                    })
+                });
+                
+                if let Ok(existing_stats) = result {
+                    stats = existing_stats;
+                }
+            }
+            
+            Ok(stats)
+        }
+        Err(e) => Err(format!("Database error: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn update_daily_stats(tasks_increment: i64, xp_increment: i64, gold_increment: i64) -> Result<DailyStats, String> {
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    
+    match Connection::open("game.db") {
+        Ok(connection) => {
+            // Insert or update daily stats
+            let query = "INSERT OR REPLACE INTO daily_stats 
+                        (user_id, date, tasks_completed, xp_earned, gold_earned, productivity_score, updated_at)
+                        VALUES (1, ?, 
+                               COALESCE((SELECT tasks_completed FROM daily_stats WHERE user_id = 1 AND date = ?), 0) + ?,
+                               COALESCE((SELECT xp_earned FROM daily_stats WHERE user_id = 1 AND date = ?), 0) + ?,
+                               COALESCE((SELECT gold_earned FROM daily_stats WHERE user_id = 1 AND date = ?), 0) + ?,
+                               MIN(100, COALESCE((SELECT tasks_completed FROM daily_stats WHERE user_id = 1 AND date = ?), 0) + ? * 15 + 
+                               (COALESCE((SELECT xp_earned FROM daily_stats WHERE user_id = 1 AND date = ?), 0) + ?) * 0.1),
+                               CURRENT_TIMESTAMP)";
+            
+            match connection.execute(
+                query, 
+                [
+                    &today.clone(),     // date
+                    &today.clone(),     // date for SELECT tasks_completed
+                    &tasks_increment.to_string(),   // tasks increment
+                    &today.clone(),     // date for SELECT xp_earned
+                    &xp_increment.to_string(),      // xp increment
+                    &today.clone(),     // date for SELECT gold_earned
+                    &gold_increment.to_string(),    // gold increment
+                    &today.clone(),     // date for productivity score calc
+                    &tasks_increment.to_string(),   // tasks for productivity score
+                    &today.clone(),     // date for productivity score calc (xp)
+                    &xp_increment.to_string(),      // xp for productivity score
+                ]
+            ) {
+                Ok(_) => {
+                    
+                    // Return updated stats
+                    get_daily_stats().await
+                }
+                Err(e) => Err(format!("Failed to prepare statement: {}", e))
+            }
+        }
+        Err(e) => Err(format!("Database error: {}", e))
+    }
+}
+
+#[tauri::command]
 async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEvent>, String> {
     // For now, return empty events
     // In a real implementation, you would:
@@ -1034,8 +1145,8 @@ async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEv
         CalendarEvent {
             id: "apple-event-1".to_string(),
             title: "Team Meeting".to_string(),
-            start: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            end: Some((chrono::Utc::now() + chrono::Duration::hours(1)).format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            start: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            end: Some((Utc::now() + Duration::hours(1)).format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             all_day: Some(false),
             description: Some("Weekly team sync".to_string()),
             source: "apple".to_string(),
@@ -1071,6 +1182,8 @@ pub fn run() {
             avatar::equip_item,
             avatar::unequip_item,
             avatar::get_avatar_config,
+            get_daily_stats,
+            update_daily_stats,
             connect_apple_calendar,
             disconnect_apple_calendar,
             get_apple_calendar_events

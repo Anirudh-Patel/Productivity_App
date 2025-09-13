@@ -1,5 +1,6 @@
-import { Bell, Zap, Coins, Menu } from 'lucide-react'
+import { Zap, Coins, Menu } from 'lucide-react'
 import { useGameStore } from '../../../store/gameStore'
+import NotificationsDropdown from '../ui/NotificationsDropdown'
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -39,10 +40,7 @@ const Header = ({ onToggleSidebar }: HeaderProps) => {
         </div>
 
         {/* Notifications */}
-        <button className="relative p-2 hover:bg-theme-bg rounded-lg transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificationsDropdown />
       </div>
     </header>
   )
