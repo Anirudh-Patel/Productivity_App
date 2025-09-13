@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Achievement Unlocked!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: transparent;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+
+        .achievement-popup {
+            width: 400px;
+            height: 200px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 120px rgba(102, 126, 234, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            animation: slideIn 0.5s ease-out, pulse 2s infinite;
+        }
+
+        .achievement-popup.legendary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 120px rgba(245, 87, 108, 0.8);
+        }
+
+        .achievement-popup.epic {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 120px rgba(254, 225, 64, 0.6);
+        }
+
+        .achievement-popup.rare {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 120px rgba(48, 207, 208, 0.6);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(420px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+            }
+        }
+
+        .achievement-header {
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            opacity: 0.9;
+        }
+
+        .achievement-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            font-size: 30px;
+            backdrop-filter: blur(10px);
+            animation: rotate 3s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .achievement-title {
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .achievement-description {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .close-timer {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .close-timer-fill {
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            animation: timerFill 3s linear forwards;
+        }
+
+        @keyframes timerFill {
+            from {
+                width: 100%;
+            }
+            to {
+                width: 0%;
+            }
+        }
+
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0;
+            animation: particleFloat 3s ease-out infinite;
+        }
+
+        @keyframes particleFloat {
+            0% {
+                opacity: 0;
+                transform: translateY(0) scale(0);
+            }
+            10% {
+                opacity: 1;
+                transform: translateY(-20px) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(0.5);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="achievement-popup" id="achievementPopup">
+        <div class="particles" id="particles"></div>
+        <div class="achievement-header">ACHIEVEMENT UNLOCKED</div>
+        <div class="achievement-icon" id="achievementIcon">🏆</div>
+        <div class="achievement-title" id="achievementTitle">Loading...</div>
+        <div class="achievement-description" id="achievementDescription">Loading...</div>
+        <div class="close-timer">
+            <div class="close-timer-fill"></div>
+        </div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const achievementName = decodeURIComponent(urlParams.get('name') || 'Achievement');
+        const achievementDescription = decodeURIComponent(urlParams.get('description') || '');
+        const achievementIcon = decodeURIComponent(urlParams.get('icon') || '🏆');
+        const achievementRarity = decodeURIComponent(urlParams.get('rarity') || 'common');
+
+        // Set achievement details
+        document.getElementById('achievementTitle').textContent = achievementName;
+        document.getElementById('achievementDescription').textContent = achievementDescription;
+        document.getElementById('achievementIcon').textContent = achievementIcon;
+
+        // Apply rarity class
+        const popup = document.getElementById('achievementPopup');
+        if (achievementRarity !== 'common') {
+            popup.classList.add(achievementRarity);
+        }
+
+        // Create particles
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 20; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.width = Math.random() * 6 + 2 + 'px';
+            particle.style.height = particle.style.width;
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            particlesContainer.appendChild(particle);
+        }
+
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+            window.close();
+        }, 3000);
+    </script>
+</body>
+</html>

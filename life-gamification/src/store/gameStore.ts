@@ -14,6 +14,7 @@ import { logger, logUserAction, logPerformance } from '../utils/logger';
 import { withErrorHandling } from '../utils/errorHandler';
 import { PerformanceMonitor } from '../utils/performance';
 import { notificationService } from '../services/notificationService';
+import { rewardSystem, rollReward, type Reward } from '../services/rewardService';
 
 export const useGameStore = create<GameState>((set, get) => ({
   user: null,
@@ -152,22 +153,59 @@ export const useGameStore = create<GameState>((set, get) => ({
           // Refresh user data to get updated XP/gold
           await get().fetchUser();
           
+          // Roll for variable rewards
+          const currentUser = get().user;
+          let bonusRewards: Reward[] = [];
+          if (currentUser) {
+            // Calculate performance based on task difficulty
+            const performance = taskToComplete?.difficulty ? (taskToComplete.difficulty / 5) : 1.0;
+            
+            // Roll 1-3 rewards based on task difficulty
+            const rollCount = Math.min(3, Math.max(1, Math.floor((taskToComplete?.difficulty || 1) / 3)));
+            for (let i = 0; i < rollCount; i++) {
+              const reward = rollReward(currentUser.level, performance);
+              bonusRewards.push(reward);
+              
+              // Apply the reward
+              try {
+                await rewardSystem.applyReward(reward, currentUser.id);
+              } catch (error) {
+                console.error('Failed to apply bonus reward:', error);
+              }
+            }
+            
+            // Show reward notifications
+            for (const reward of bonusRewards) {
+              if (reward.type === 'item' || reward.type === 'character_skin' || reward.type === 'secret_chapter') {
+                notificationService.notifyItemReceived(
+                  reward.name,
+                  reward.rarity as 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+                );
+              }
+            }
+          }
+          
           // Check for new achievements
           const newAchievements = await get().checkAchievements();
           
           // Trigger notifications
-          const currentUser = get().user;
           if (currentUser && previousUser) {
             // Use the original task's base experience reward (more reliable)
             const xpGained = taskToComplete?.base_experience_reward || completedTask.base_experience_reward || 0;
-            console.log('xpGained being sent to notification:', xpGained);
-            console.log('Source: taskToComplete?.base_experience_reward:', taskToComplete?.base_experience_reward);
-            console.log('Fallback: completedTask.base_experience_reward:', completedTask.base_experience_reward);
+            
+            // Add bonus XP from variable rewards
+            const bonusXP = bonusRewards
+              .filter(r => r.type === 'exp')
+              .reduce((sum, r) => sum + (r.amount || 0), 0);
+            
+            const totalXP = xpGained + bonusXP;
+            
+            console.log('Total XP gained:', totalXP, '(base:', xpGained, ', bonus:', bonusXP, ')');
             
             // Notify task completion with rewards
             notificationService.notifyTaskCompletionWithRewards(
               completedTask.title,
-              xpGained,
+              totalXP,
               newAchievements.map(achievement => ({
                 name: achievement.name,
                 description: achievement.description,
@@ -179,6 +217,11 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (currentUser.level > previousUser.level) {
               notificationService.notifyLevelUp(currentUser.level, previousUser.level);
             }
+          }
+          
+          // Refresh user data again if rewards were applied
+          if (bonusRewards.length > 0) {
+            await get().fetchUser();
           }
           
         } catch (error) {
@@ -264,7 +307,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Refresh achievements list
         get().fetchAchievements();
         
-        // Show achievement notification (you can add this later)
+        // Show achievement popup for each new achievement
+        for (const achievement of newAchievements) {
+          try {
+            await invoke('create_achievement_popup', { achievement });
+          } catch (popupError) {
+            console.error('Failed to create achievement popup:', popupError);
+          }
+        }
+        
         console.log('🏆 New achievements unlocked:', newAchievements);
       }
       

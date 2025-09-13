@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use chrono::{DateTime, Utc, Duration};
 use rusqlite::Connection;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use uuid::Uuid;
 
 // Import avatar commands
 mod commands;
@@ -1041,6 +1043,59 @@ async fn disconnect_apple_calendar() -> Result<(), String> {
     Ok(())
 }
 
+// Database performance initialization
+#[tauri::command]
+async fn initialize_database() -> Result<(), String> {
+    match Connection::open("game.db") {
+        Ok(connection) => {
+            // Enable WAL mode for better concurrent performance
+            connection.execute("PRAGMA journal_mode = WAL", []).map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+            
+            // Set synchronous to NORMAL for better performance while maintaining durability
+            connection.execute("PRAGMA synchronous = NORMAL", []).map_err(|e| format!("Failed to set synchronous mode: {}", e))?;
+            
+            // Use memory for temp storage
+            connection.execute("PRAGMA temp_store = MEMORY", []).map_err(|e| format!("Failed to set temp store: {}", e))?;
+            
+            // Enable memory mapping for faster reads (256MB)
+            connection.execute("PRAGMA mmap_size = 268435456", []).map_err(|e| format!("Failed to set mmap size: {}", e))?;
+            
+            // Increase cache size for better performance (10000 pages)
+            connection.execute("PRAGMA cache_size = 10000", []).map_err(|e| format!("Failed to set cache size: {}", e))?;
+            
+            // Create indexes for better query performance
+            create_database_indexes(&connection)?;
+            
+            println!("Database performance optimizations applied successfully");
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to open database: {}", e))
+    }
+}
+
+// Create database indexes for performance
+fn create_database_indexes(connection: &Connection) -> Result<(), String> {
+    // Index for user achievements
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_achievements ON user_achievements(user_id, achievement_id, unlocked_at)",
+        []
+    ).map_err(|e| format!("Failed to create user_achievements index: {}", e))?;
+    
+    // Index for tasks
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, status, created_at)",
+        []
+    ).map_err(|e| format!("Failed to create tasks index: {}", e))?;
+    
+    // Index for daily stats
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_daily_stats ON daily_stats(user_id, date)",
+        []
+    ).map_err(|e| format!("Failed to create daily_stats index: {}", e))?;
+    
+    Ok(())
+}
+
 #[tauri::command]
 async fn get_daily_stats() -> Result<DailyStats, String> {
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
@@ -1130,6 +1185,48 @@ async fn update_daily_stats(tasks_increment: i64, xp_increment: i64, gold_increm
     }
 }
 
+// Achievement popup system
+#[tauri::command]
+async fn create_achievement_popup(
+    app: tauri::AppHandle,
+    achievement: Achievement,
+) -> Result<(), String> {
+    let window_label = format!("achievement-{}", Uuid::new_v4());
+    
+    // Create a new window for the achievement popup
+    let _window = WebviewWindowBuilder::new(
+        &app,
+        &window_label,
+        WebviewUrl::App(format!("achievement.html?id={}&name={}&description={}&icon={}&rarity={}", 
+            achievement.id,
+            urlencoding::encode(&achievement.name),
+            urlencoding::encode(&achievement.description),
+            urlencoding::encode(&achievement.icon),
+            urlencoding::encode(&achievement.rarity)
+        ).into())
+    )
+    .title("Achievement Unlocked!")
+    .inner_size(400.0, 200.0)
+    .decorations(false)
+    .always_on_top(true)
+    .transparent(true)
+    .resizable(false)
+    .position(20.0, 20.0) // Top-right corner with padding
+    .build()
+    .map_err(|e| format!("Failed to create achievement popup: {}", e))?;
+    
+    // Auto-close after 3 seconds
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        if let Some(window) = app_clone.get_webview_window(&window_label) {
+            let _ = window.close();
+        }
+    });
+    
+    Ok(())
+}
+
 #[tauri::command]
 async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEvent>, String> {
     // For now, return empty events
@@ -1159,6 +1256,18 @@ async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEv
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            // Initialize database with performance optimizations on app startup
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = initialize_database().await {
+                    eprintln!("Failed to initialize database: {}", e);
+                } else {
+                    println!("Database initialized successfully with performance optimizations");
+                }
+            });
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -1186,7 +1295,9 @@ pub fn run() {
             update_daily_stats,
             connect_apple_calendar,
             disconnect_apple_calendar,
-            get_apple_calendar_events
+            get_apple_calendar_events,
+            initialize_database,
+            create_achievement_popup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
