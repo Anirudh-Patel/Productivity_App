@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useNotificationService } from '../services/notificationService';
 import { useGameStore } from '../store/gameStore';
 import useNotificationStore, { 
@@ -7,6 +7,7 @@ import useNotificationStore, {
   createAchievementNotification, 
   createSystemNotification 
 } from '../store/notificationStore';
+import { SoloLevelUpAnimation, SystemNotification } from '../shared/components/ui/SoloLevelingAnimations';
 
 interface NotificationProviderProps {
   children: ReactNode;
@@ -17,6 +18,21 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
   const { user } = useGameStore();
   const { addNotification, notifications } = useNotificationStore();
   const demoNotificationsAdded = useRef(false);
+  const [levelUpAnimation, setLevelUpAnimation] = useState<{ visible: boolean; level: number }>({
+    visible: false,
+    level: 1
+  });
+  const [systemNotification, setSystemNotification] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'success' | 'quest';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
 
   // Initialize notification service and set up global listeners
   useEffect(() => {
@@ -63,9 +79,57 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
   // Monitor user level changes to trigger level up notifications
   useEffect(() => {
     if (user?.level && user.previous_level && user.level > user.previous_level) {
+      // Show Solo Leveling style level up animation
+      setLevelUpAnimation({ visible: true, level: user.level });
+      
+      // Also show regular notification
       notificationService.notifyLevelUp(user.level, user.previous_level);
+      
+      // Hide animation after 3 seconds
+      setTimeout(() => {
+        setLevelUpAnimation(prev => ({ ...prev, visible: false }));
+      }, 3000);
     }
   }, [user?.level, user?.previous_level, notificationService]);
+  
+  // Listen for quest completions or system messages
+  useEffect(() => {
+    // Example: Show system notification for new quests
+    const checkForNewQuests = () => {
+      const hasNewQuest = Math.random() > 0.95; // 5% chance for demo
+      if (hasNewQuest) {
+        setSystemNotification({
+          visible: true,
+          title: 'New Quest Available!',
+          message: 'A new daily quest has been added to your journal.',
+          type: 'quest'
+        });
+        
+        setTimeout(() => {
+          setSystemNotification(prev => ({ ...prev, visible: false }));
+        }, 5000);
+      }
+    };
+    
+    const interval = setInterval(checkForNewQuests, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <SoloLevelUpAnimation 
+        isVisible={levelUpAnimation.visible}
+        newLevel={levelUpAnimation.level}
+        onComplete={() => setLevelUpAnimation(prev => ({ ...prev, visible: false }))}
+      />
+      <SystemNotification
+        isVisible={systemNotification.visible}
+        title={systemNotification.title}
+        message={systemNotification.message}
+        type={systemNotification.type}
+        onClose={() => setSystemNotification(prev => ({ ...prev, visible: false }))}
+      />
+    </>
+  );
 };
