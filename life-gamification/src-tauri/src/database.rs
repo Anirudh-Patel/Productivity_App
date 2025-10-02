@@ -96,14 +96,9 @@ pub struct Buff {
 
 // Database initialization and migration
 pub async fn init_database() -> Result<DbConnection, String> {
-    let app_dir = tauri::api::path::app_data_dir(&tauri::Config::default())
-        .ok_or("Failed to get app data directory")?;
-
-    std::fs::create_dir_all(&app_dir)
-        .map_err(|e| format!("Failed to create app directory: {}", e))?;
-
-    let db_path = app_dir.join("game.db");
-    let conn = rusqlite::Connection::open(&db_path)
+    // Use simple relative path for database
+    let db_path = "game.db";
+    let conn = rusqlite::Connection::open(db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 
     // Set performance optimizations
@@ -449,4 +444,223 @@ pub async fn get_active_buffs(conn: &DbConnection, user_id: i64) -> Result<Vec<B
 
     let buffs: Result<Vec<Buff>, _> = buff_iter.collect();
     buffs.map_err(|e| format!("Failed to collect buffs: {}", e))
+}
+
+pub async fn get_all_achievements(conn: &DbConnection) -> Result<Vec<Achievement>, String> {
+    let conn = conn.lock().await;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, icon, requirements_type, requirements_value,
+         experience_reward, gold_reward, rarity
+         FROM achievements ORDER BY rarity, name",
+    )
+    .map_err(|e| format!("Failed to prepare achievements query: {}", e))?;
+
+    let achievement_iter = stmt.query_map([], |row| {
+        Ok(Achievement {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            icon: row.get(3)?,
+            requirements_type: row.get(4)?,
+            requirements_value: row.get(5)?,
+            experience_reward: row.get(6)?,
+            gold_reward: row.get(7)?,
+            rarity: row.get(8)?,
+        })
+    })
+    .map_err(|e| format!("Failed to query achievements: {}", e))?;
+
+    let achievements: Result<Vec<Achievement>, _> = achievement_iter.collect();
+    achievements.map_err(|e| format!("Failed to collect achievements: {}", e))
+}
+
+pub async fn get_user_achievements(conn: &DbConnection, user_id: i64) -> Result<Vec<UserAchievement>, String> {
+    let conn = conn.lock().await;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, user_id, achievement_id, unlocked_at
+         FROM user_achievements WHERE user_id = ?1 ORDER BY unlocked_at DESC",
+    )
+    .map_err(|e| format!("Failed to prepare user achievements query: {}", e))?;
+
+    let user_achievement_iter = stmt.query_map([user_id], |row| {
+        Ok(UserAchievement {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            achievement_id: row.get(2)?,
+            unlocked_at: row.get(3)?,
+        })
+    })
+    .map_err(|e| format!("Failed to query user achievements: {}", e))?;
+
+    let user_achievements: Result<Vec<UserAchievement>, _> = user_achievement_iter.collect();
+    user_achievements.map_err(|e| format!("Failed to collect user achievements: {}", e))
+}
+
+pub async fn unlock_achievement(conn: &DbConnection, user_id: i64, achievement_id: i64) -> Result<(), String> {
+    let conn = conn.lock().await;
+
+    // Check if already unlocked
+    let already_unlocked: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM user_achievements WHERE user_id = ?1 AND achievement_id = ?2",
+        rusqlite::params![user_id, achievement_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(0);
+
+    if already_unlocked > 0 {
+        return Ok(()); // Already unlocked, skip
+    }
+
+    conn.execute(
+        "INSERT INTO user_achievements (user_id, achievement_id) VALUES (?1, ?2)",
+        rusqlite::params![user_id, achievement_id],
+    )
+    .map_err(|e| format!("Failed to unlock achievement: {}", e))?;
+
+    Ok(())
+}
+
+pub async fn update_task(conn: &DbConnection, task: &Task) -> Result<(), String> {
+    let conn = conn.lock().await;
+
+    conn.execute(
+        "UPDATE tasks SET
+         title = ?2, description = ?3, category = ?4, difficulty = ?5,
+         base_experience_reward = ?6, gold_reward = ?7, due_date = ?8,
+         status = ?9, priority = ?10, task_type = ?11
+         WHERE id = ?1",
+        rusqlite::params![
+            task.id,
+            task.title,
+            task.description,
+            task.category,
+            task.difficulty,
+            task.base_experience_reward,
+            task.gold_reward,
+            task.due_date,
+            task.status,
+            task.priority,
+            task.task_type,
+        ],
+    )
+    .map_err(|e| format!("Failed to update task: {}", e))?;
+
+    Ok(())
+}
+
+pub async fn update_task_progress(conn: &DbConnection, task_id: i64, current_progress: i32) -> Result<(), String> {
+    let conn = conn.lock().await;
+
+    conn.execute(
+        "UPDATE task_progress SET current_progress = ?2 WHERE task_id = ?1",
+        rusqlite::params![task_id, current_progress],
+    )
+    .map_err(|e| format!("Failed to update task progress: {}", e))?;
+
+    Ok(())
+}
+
+pub async fn add_inventory_item(conn: &DbConnection, item: &InventoryItem) -> Result<i64, String> {
+    let conn = conn.lock().await;
+
+    // Check if item already exists
+    let existing: Result<i64, _> = conn.query_row(
+        "SELECT id FROM inventory_items WHERE user_id = ?1 AND name = ?2",
+        rusqlite::params![item.user_id, item.name],
+        |row| row.get(0),
+    );
+
+    match existing {
+        Ok(id) => {
+            // Update quantity
+            conn.execute(
+                "UPDATE inventory_items SET quantity = quantity + ?1 WHERE id = ?2",
+                rusqlite::params![item.quantity, id],
+            )
+            .map_err(|e| format!("Failed to update inventory quantity: {}", e))?;
+            Ok(id)
+        }
+        Err(_) => {
+            // Insert new item
+            conn.execute(
+                "INSERT INTO inventory_items (user_id, name, description, item_type, rarity, quantity, price, effects, icon, color)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                rusqlite::params![
+                    item.user_id,
+                    item.name,
+                    item.description,
+                    item.item_type,
+                    item.rarity,
+                    item.quantity,
+                    item.price,
+                    item.effects,
+                    item.icon,
+                    item.color,
+                ],
+            )
+            .map_err(|e| format!("Failed to insert inventory item: {}", e))?;
+            Ok(conn.last_insert_rowid())
+        }
+    }
+}
+
+pub async fn remove_inventory_item(conn: &DbConnection, user_id: i64, item_name: &str, quantity: i32) -> Result<(), String> {
+    let conn = conn.lock().await;
+
+    // Get current quantity
+    let current_quantity: i32 = conn.query_row(
+        "SELECT quantity FROM inventory_items WHERE user_id = ?1 AND name = ?2",
+        rusqlite::params![user_id, item_name],
+        |row| row.get(0),
+    )
+    .map_err(|e| format!("Item not found in inventory: {}", e))?;
+
+    if current_quantity < quantity {
+        return Err(format!("Not enough items to remove. Have {}, trying to remove {}", current_quantity, quantity));
+    }
+
+    let new_quantity = current_quantity - quantity;
+
+    if new_quantity == 0 {
+        // Remove item completely
+        conn.execute(
+            "DELETE FROM inventory_items WHERE user_id = ?1 AND name = ?2",
+            rusqlite::params![user_id, item_name],
+        )
+        .map_err(|e| format!("Failed to delete inventory item: {}", e))?;
+    } else {
+        // Update quantity
+        conn.execute(
+            "UPDATE inventory_items SET quantity = ?1 WHERE user_id = ?2 AND name = ?3",
+            rusqlite::params![new_quantity, user_id, item_name],
+        )
+        .map_err(|e| format!("Failed to update inventory quantity: {}", e))?;
+    }
+
+    Ok(())
+}
+
+pub async fn add_buff(conn: &DbConnection, buff: &Buff) -> Result<i64, String> {
+    let conn = conn.lock().await;
+
+    conn.execute(
+        "INSERT INTO active_buffs (user_id, name, description, buff_type, effect_value, affected_stat, expires_at, source, source_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            buff.user_id,
+            buff.name,
+            buff.description,
+            buff.buff_type,
+            buff.effect_value,
+            buff.affected_stat,
+            buff.expires_at,
+            buff.source,
+            buff.source_id,
+        ],
+    )
+    .map_err(|e| format!("Failed to insert buff: {}", e))?;
+
+    Ok(conn.last_insert_rowid())
 }

@@ -11,9 +11,7 @@ mod commands;
 use commands::avatar;
 
 mod database;
-
-// Database State
-pub struct DbConnection(pub Mutex<Connection>);
+use database::DbConnection;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,7 +30,7 @@ pub struct User {
     pub max_health: i64,
     pub gold: i64,
     pub theme_preference: String,
-    pub active_title: Option<String>,
+    pub equipped_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +116,9 @@ pub struct InventoryItem {
     pub obtained_at: String,
 }
 
+// NOTE: Global state removed - all data now in database
+// Commands not yet refactored will return "not implemented" errors
+
 // Basic commands to test the app is working
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -147,204 +148,153 @@ fn calculate_level_and_progress(xp: i64) -> (i64, i64) {
 }
 
 // Initialize default user and tasks
-fn initialize_default_data() {
-    // Initialize achievements if not already done
-    let mut achievements_guard = ACHIEVEMENTS_STATE.lock().unwrap();
-    if achievements_guard.is_empty() {
-        *achievements_guard = vec![
-            Achievement {
-                id: 1,
-                name: "First Quest".to_string(),
-                description: "Complete your first task".to_string(),
-                icon: "trophy".to_string(),
-                requirements_type: "tasks_completed".to_string(),
-                requirements_value: 1,
-                experience_reward: 50,
-                gold_reward: 25,
-                rarity: "common".to_string(),
-            },
-            Achievement {
-                id: 2,
-                name: "Quest Master".to_string(),
-                description: "Complete 10 tasks".to_string(),
-                icon: "crown".to_string(),
-                requirements_type: "tasks_completed".to_string(),
-                requirements_value: 10,
-                experience_reward: 200,
-                gold_reward: 100,
-                rarity: "rare".to_string(),
-            },
-            Achievement {
-                id: 3,
-                name: "Level Up!".to_string(),
-                description: "Reach level 5".to_string(),
-                icon: "star".to_string(),
-                requirements_type: "level".to_string(),
-                requirements_value: 5,
-                experience_reward: 150,
-                gold_reward: 75,
-                rarity: "uncommon".to_string(),
-            },
-            Achievement {
-                id: 4,
-                name: "Gold Hoarder".to_string(),
-                description: "Accumulate 500 gold".to_string(),
-                icon: "coins".to_string(),
-                requirements_type: "gold".to_string(),
-                requirements_value: 500,
-                experience_reward: 100,
-                gold_reward: 50,
-                rarity: "uncommon".to_string(),
-            },
-            Achievement {
-                id: 5,
-                name: "Legendary Hero".to_string(),
-                description: "Complete 50 tasks".to_string(),
-                icon: "award".to_string(),
-                requirements_type: "tasks_completed".to_string(),
-                requirements_value: 50,
-                experience_reward: 500,
-                gold_reward: 250,
-                rarity: "legendary".to_string(),
-            },
-        ];
-    }
-    drop(achievements_guard);
-    
-    let mut user_guard = USER_STATE.lock().unwrap();
-    if user_guard.is_none() {
-        let (level, xp_to_next) = calculate_level_and_progress(450);
-        *user_guard = Some(User {
-            id: 1,
-            username: "Test Player".to_string(),
-            level,
-            experience_points: 450,
-            experience_to_next_level: xp_to_next,
-            strength: 15,
-            intelligence: 12,
-            endurance: 18,
-            charisma: 10,
-            luck: 8,
-            current_health: 85,
-            max_health: 100,
-            gold: 250,
-            theme_preference: "solo_leveling".to_string(),
-            active_title: Some("Dragon Slayer".to_string()),
-        });
-    }
-    drop(user_guard);
+// REMOVED: initialize_default_data() - Data now comes from database
+// fn initialize_default_data() {
+//     // This function is no longer needed as all data is persisted in the database
+// }
 
-    let mut tasks_guard = TASKS_STATE.lock().unwrap();
-    if tasks_guard.is_empty() {
-        tasks_guard.extend(vec![
-            Task {
-                id: 1,
-                user_id: 1,
-                title: "Complete morning routine".to_string(),
-                description: Some("Brush teeth, shower, eat breakfast".to_string()),
-                category: "health".to_string(),
-                difficulty: 3,
-                base_experience_reward: 20,
-                gold_reward: 5,
-                due_date: None,
-                status: "active".to_string(),
-                priority: 2,
-                created_at: "2025-08-28T08:00:00Z".to_string(),
-                completed_at: None,
-                task_type: "standard".to_string(),
-                goal_target: None,
-                goal_current: None,
-                goal_unit: None,
-            },
-            Task {
-                id: 2,
-                user_id: 1,
-                title: "Read for 30 minutes".to_string(),
-                description: Some("Continue reading current book".to_string()),
-                category: "learning".to_string(),
-                difficulty: 2,
-                base_experience_reward: 15,
-                gold_reward: 3,
-                due_date: None,
-                status: "active".to_string(),
-                priority: 1,
-                created_at: "2025-08-28T09:00:00Z".to_string(),
-                completed_at: None,
-                task_type: "standard".to_string(),
-                goal_target: None,
-                goal_current: None,
-                goal_unit: None,
-            },
-            Task {
-                id: 3,
-                user_id: 1,
-                title: "Daily Steps Goal".to_string(),
-                description: Some("Walk 10,000 steps today".to_string()),
-                category: "fitness".to_string(),
-                difficulty: 4,
-                base_experience_reward: 30,
-                gold_reward: 8,
-                due_date: None,
-                status: "active".to_string(),
-                priority: 2,
-                created_at: "2025-08-28T10:00:00Z".to_string(),
-                completed_at: None,
-                task_type: "goal".to_string(),
-                goal_target: Some(10000),
-                goal_current: Some(2500),
-                goal_unit: Some("steps".to_string()),
-            },
-        ]);
-    }
+#[tauri::command]
+async fn get_user(db: tauri::State<'_, DbConnection>) -> Result<User, String> {
+    let conn = db.lock().await;
+
+    let user = conn.query_row(
+        "SELECT id, username, level, experience_points, experience_to_next_level,
+         strength, intelligence, endurance, charisma, luck,
+         current_health, max_health, gold, theme_preference, equipped_title
+         FROM users WHERE id = 1",
+        [],
+        |row| {
+            Ok(User {
+                id: row.get::<_, i64>(0)?,
+                username: row.get(1)?,
+                level: row.get::<_, i32>(2).map(|v| v as i64)?,
+                experience_points: row.get::<_, i32>(3).map(|v| v as i64)?,
+                experience_to_next_level: row.get::<_, i32>(4).map(|v| v as i64)?,
+                strength: row.get::<_, i32>(5).map(|v| v as i64)?,
+                intelligence: row.get::<_, i32>(6).map(|v| v as i64)?,
+                endurance: row.get::<_, i32>(7).map(|v| v as i64)?,
+                charisma: row.get::<_, i32>(8).map(|v| v as i64)?,
+                luck: row.get::<_, i32>(9).map(|v| v as i64)?,
+                current_health: row.get::<_, i32>(10).map(|v| v as i64)?,
+                max_health: row.get::<_, i32>(11).map(|v| v as i64)?,
+                gold: row.get::<_, i32>(12).map(|v| v as i64)?,
+                theme_preference: row.get(13)?,
+                equipped_title: row.get(14)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Failed to get user: {}", e))?;
+
+    Ok(user)
 }
 
 #[tauri::command]
-async fn get_user() -> Result<User, String> {
-    initialize_default_data();
-    
-    let user_guard = USER_STATE.lock().unwrap();
-    match user_guard.as_ref() {
-        Some(user) => Ok(user.clone()),
-        None => Err("User not found".to_string()),
-    }
-}
+async fn get_tasks(db: tauri::State<'_, DbConnection>, status: Option<String>) -> Result<Vec<Task>, String> {
+    let conn = db.lock().await;
 
-#[tauri::command]
-async fn get_tasks(status: Option<String>) -> Result<Vec<Task>, String> {
-    initialize_default_data();
-    
-    let tasks_guard = TASKS_STATE.lock().unwrap();
-    let filtered_tasks: Vec<Task> = match status {
-        Some(status_filter) => tasks_guard.iter()
-            .filter(|task| task.status == status_filter)
-            .cloned()
-            .collect(),
-        None => tasks_guard.clone(),
+    let query = match status {
+        Some(ref s) => format!(
+            "SELECT t.id, t.user_id, t.title, t.description, t.category, t.difficulty,
+             t.base_experience_reward, t.gold_reward, t.due_date, t.status, t.priority,
+             COALESCE(t.task_type, 'standard') as task_type,
+             tp.target_progress as goal_target, tp.current_progress as goal_current
+             FROM tasks t
+             LEFT JOIN task_progress tp ON t.id = tp.task_id
+             WHERE t.user_id = 1 AND t.status = '{}' AND t.status != 'archived'
+             ORDER BY t.priority DESC, t.due_date ASC", s
+        ),
+        None => "SELECT t.id, t.user_id, t.title, t.description, t.category, t.difficulty,
+             t.base_experience_reward, t.gold_reward, t.due_date, t.status, t.priority,
+             COALESCE(t.task_type, 'standard') as task_type,
+             tp.target_progress as goal_target, tp.current_progress as goal_current
+             FROM tasks t
+             LEFT JOIN task_progress tp ON t.id = tp.task_id
+             WHERE t.user_id = 1 AND t.status != 'archived'
+             ORDER BY t.priority DESC, t.due_date ASC".to_string(),
     };
-    
-    Ok(filtered_tasks)
+
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare tasks query: {}", e))?;
+
+    let task_iter = stmt.query_map([], |row| {
+        Ok(Task {
+            id: row.get::<_, i64>(0)?,
+            user_id: row.get::<_, i64>(1)?,
+            title: row.get(2)?,
+            description: row.get(3)?,
+            category: row.get(4)?,
+            difficulty: row.get::<_, i32>(5).map(|v| v as i64)?,
+            base_experience_reward: row.get::<_, i32>(6).map(|v| v as i64)?,
+            gold_reward: row.get::<_, i32>(7).map(|v| v as i64)?,
+            due_date: row.get(8)?,
+            status: row.get(9)?,
+            priority: row.get::<_, i32>(10).map(|v| v as i64)?,
+            created_at: "".to_string(), // Not in database
+            completed_at: None, // TODO: add to database schema
+            task_type: row.get(11)?,
+            goal_target: row.get::<_, Option<i32>>(12).ok().flatten().map(|v| v as i64),
+            goal_current: row.get::<_, Option<i32>>(13).ok().flatten().map(|v| v as i64),
+            goal_unit: None, // Not in database yet
+        })
+    })
+    .map_err(|e| format!("Failed to query tasks: {}", e))?;
+
+    let tasks: Result<Vec<Task>, _> = task_iter.collect();
+    tasks.map_err(|e| format!("Failed to collect tasks: {}", e))
 }
 
 #[tauri::command]
-async fn create_task(task_data: CreateTaskRequest) -> Result<Task, String> {
-    initialize_default_data();
-    
+async fn create_task(db: tauri::State<'_, DbConnection>, task_data: CreateTaskRequest) -> Result<Task, String> {
     let difficulty = task_data.difficulty.unwrap_or(5);
     let category = task_data.category.unwrap_or_else(|| "general".to_string());
     let priority = task_data.priority.unwrap_or(3);
     let task_type = task_data.task_type.unwrap_or_else(|| "standard".to_string());
-    
+
     // Calculate rewards based on difficulty
     let base_xp = 10 + (difficulty - 1) * 5;
     let gold_reward = 1 + (difficulty - 1);
-    
-    // Generate new task ID
-    let mut counter = TASK_COUNTER.lock().unwrap();
-    let task_id = *counter;
-    *counter += 1;
-    drop(counter);
-    
-    let new_task = Task {
+
+    let conn = db.lock().await;
+
+    // Insert task into database
+    let tx = conn.unchecked_transaction()
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    tx.execute(
+        "INSERT INTO tasks (user_id, title, description, category, difficulty,
+         base_experience_reward, gold_reward, due_date, status, priority, task_type)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?9)",
+        rusqlite::params![
+            task_data.title,
+            task_data.description,
+            category,
+            difficulty as i32,
+            base_xp as i32,
+            gold_reward as i32,
+            task_data.due_date,
+            priority as i32,
+            task_type,
+        ],
+    )
+    .map_err(|e| format!("Failed to insert task: {}", e))?;
+
+    let task_id = tx.last_insert_rowid();
+
+    // If it's a goal-based task, create progress tracking
+    if task_type == "goal" && task_data.goal_target.is_some() {
+        tx.execute(
+            "INSERT INTO task_progress (task_id, current_progress, target_progress)
+             VALUES (?1, 0, ?2)",
+            rusqlite::params![task_id, task_data.goal_target.unwrap() as i32],
+        )
+        .map_err(|e| format!("Failed to insert task progress: {}", e))?;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    // Return the created task
+    Ok(Task {
         id: task_id,
         user_id: 1,
         title: task_data.title,
@@ -356,94 +306,85 @@ async fn create_task(task_data: CreateTaskRequest) -> Result<Task, String> {
         due_date: task_data.due_date,
         status: "active".to_string(),
         priority,
-        created_at: "2025-08-28T10:00:00Z".to_string(),
+        created_at: "".to_string(),
         completed_at: None,
         task_type,
         goal_target: task_data.goal_target,
         goal_current: if task_data.goal_target.is_some() { Some(0) } else { None },
         goal_unit: task_data.goal_unit,
-    };
-    
-    // Add to global state
-    let mut tasks_guard = TASKS_STATE.lock().unwrap();
-    tasks_guard.push(new_task.clone());
-    
-    Ok(new_task)
+    })
 }
 
 #[tauri::command]
-async fn complete_task(task_id: i64) -> Result<Task, String> {
-    initialize_default_data();
-    
-    // Find and update the task
-    let mut tasks_guard = TASKS_STATE.lock().unwrap();
-    let task_index = tasks_guard.iter().position(|t| t.id == task_id)
-        .ok_or("Task not found".to_string())?;
-        
-    let mut task = tasks_guard[task_index].clone();
-    
-    // Only complete if not already completed
-    if task.status == "completed" {
-        return Ok(task);
-    }
-    
-    // Mark as completed
-    task.status = "completed".to_string();
-    task.completed_at = Some("2025-08-28T10:00:00Z".to_string());
-    tasks_guard[task_index] = task.clone();
-    drop(tasks_guard);
-    
-    // Award XP and gold to user with stat bonuses AND buff effects
-    let (final_xp, final_gold) = {
-        let mut user_guard = USER_STATE.lock().unwrap();
-        if let Some(ref mut user) = user_guard.as_mut() {
-            // Get buffed stats for calculations
-            let (_, buffed_int, _, _, buffed_luck) = apply_stat_buffs_to_user_stats(user);
-            
-            // Calculate stat bonuses with buffed stats
-            let int_bonus = buffed_int as f64 * 0.02; // 2% XP bonus per INT point
-            let luck_bonus = buffed_luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
-            
-            // Apply stat bonuses to base rewards
-            let stat_xp_reward = (task.base_experience_reward as f64 * (1.0 + int_bonus)) as i64;
-            let stat_gold_reward = (task.gold_reward as f64 * (1.0 + luck_bonus)) as i64;
-            
-            // Apply buff multipliers on top of stat bonuses
-            let (final_xp, final_gold) = apply_buff_effects_to_rewards(stat_xp_reward, stat_gold_reward);
-            
-            user.experience_points += final_xp;
-            user.gold += final_gold;
-            
-            println!("Task completed! Base XP: {} -> {} (with stat+buff bonuses), Base Gold: {} -> {} (with stat+buff bonuses)", 
-                task.base_experience_reward, final_xp, task.gold_reward, final_gold);
-            
-            // Recalculate level and XP to next level
-            let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
-            let level_up = new_level > user.level;
-            user.level = new_level;
-            user.experience_to_next_level = xp_to_next;
-            
-            // Level up bonus - restore health
-            if level_up {
-                user.current_health = user.max_health;
-            }
-            
-            (final_xp, final_gold)
+async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Result<Task, String> {
+    // Perform all database operations in a single scope
+    {
+        let conn = db.lock().await;
+
+        // Start transaction for atomic updates
+        let tx = conn.unchecked_transaction()
+            .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+        // Get task details and check if already completed
+        let (task_status, xp_reward, gold_reward): (String, i32, i32) = tx.query_row(
+            "SELECT status, base_experience_reward, gold_reward FROM tasks WHERE id = ?1 AND user_id = 1",
+            [task_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|e| format!("Task not found: {}", e))?;
+
+        if task_status == "completed" {
+            drop(tx);
+            // Already completed, will fetch and return below
         } else {
-            (0, 0) // Default values if user is None
+            // Get user stats for bonus calculations
+            let (intelligence, luck): (i32, i32) = tx.query_row(
+                "SELECT intelligence, luck FROM users WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|e| format!("Failed to get user stats: {}", e))?;
+
+            // Calculate stat bonuses
+            let int_bonus = intelligence as f64 * 0.02; // 2% XP bonus per INT point
+            let luck_bonus = luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
+
+            let final_xp = (xp_reward as f64 * (1.0 + int_bonus)) as i32;
+            let final_gold = (gold_reward as f64 * (1.0 + luck_bonus)) as i32;
+
+            // Mark task as completed
+            tx.execute(
+                "UPDATE tasks SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                [task_id],
+            )
+            .map_err(|e| format!("Failed to update task status: {}", e))?;
+
+            // Update user stats with rewards
+            tx.execute(
+                "UPDATE users SET experience_points = experience_points + ?1, gold = gold + ?2 WHERE id = 1",
+                rusqlite::params![final_xp, final_gold],
+            )
+            .map_err(|e| format!("Failed to update user stats: {}", e))?;
+
+            println!("Task completed! Base XP: {} -> {} (with stat bonuses), Base Gold: {} -> {} (with stat bonuses)",
+                xp_reward, final_xp, gold_reward, final_gold);
+
+            tx.commit()
+                .map_err(|e| format!("Failed to commit transaction: {}", e))?;
         }
-    };
-    
-    // Update daily stats (temporarily disabled due to async complexity)
-    // TODO: Re-enable with proper thread-safe approach
-    // let _ = update_daily_stats(1, final_xp, final_gold).await;
-    
-    Ok(task)
+    } // Connection is dropped here
+
+    // Now fetch and return the completed task
+    get_tasks(db, Some("completed".to_string()))
+        .await?
+        .into_iter()
+        .find(|t| t.id == task_id)
+        .ok_or("Task not found after completion".to_string())
 }
 
 #[tauri::command]
 async fn update_task_progress(task_id: i64, progress_amount: i64) -> Result<Task, String> {
-    initialize_default_data();
+    // TODO: Refactor this command to use database
     
     // Find and update the task
     let mut tasks_guard = TASKS_STATE.lock().unwrap();
@@ -501,14 +442,14 @@ async fn update_task_progress(task_id: i64, progress_amount: i64) -> Result<Task
 
 #[tauri::command]
 async fn get_user_achievements() -> Result<Vec<UserAchievement>, String> {
-    initialize_default_data();
+    // TODO: Refactor this command to use database
     let user_achievements = USER_ACHIEVEMENTS_STATE.lock().unwrap();
     Ok(user_achievements.clone())
 }
 
 #[tauri::command]
 async fn check_achievements() -> Result<Vec<Achievement>, String> {
-    initialize_default_data();
+    // TODO: Refactor this command to use database
     
     let mut newly_unlocked = Vec::new();
     let user_guard = USER_STATE.lock().unwrap();
@@ -717,7 +658,7 @@ async fn use_inventory_item(item_id: String) -> Result<User, String> {
         
         // Apply item effect to user
         if let Some(ref mut user) = user_guard.as_mut() {
-            if let Some(ref effect) = item.effect {
+            if let Some(effect) = &item.effect {
                 apply_item_effect(user, effect)?;
             }
             
@@ -831,7 +772,7 @@ async fn equip_title(title: String) -> Result<User, String> {
     }
     
     if let Some(ref mut user) = user_guard.as_mut() {
-        user.active_title = Some(title.clone());
+        user.equipped_title = Some(title.clone());
         println!("User {} equipped title: {}", user.username, title);
         Ok(user.clone())
     } else {
@@ -842,9 +783,9 @@ async fn equip_title(title: String) -> Result<User, String> {
 #[tauri::command]
 async fn unequip_title() -> Result<User, String> {
     let mut user_guard = USER_STATE.lock().unwrap();
-    
+
     if let Some(ref mut user) = user_guard.as_mut() {
-        user.active_title = None;
+        user.equipped_title = None;
         println!("User {} unequipped title", user.username);
         Ok(user.clone())
     } else {
@@ -899,7 +840,7 @@ fn apply_stat_buffs_to_user_stats(user: &User) -> (i64, i64, i64, i64, i64) {
     
     for buff in buffs.iter() {
         if buff.buff_type == "stat" {
-            if let Some(ref stat_type) = buff.stat_type {
+            if let Some(stat_type) = &buff.stat_type {
                 match stat_type.as_str() {
                     "strength" => strength += buff.value as i64,
                     "intelligence" => intelligence += buff.value as i64,
@@ -948,7 +889,7 @@ async fn apply_buff(buff_type: String, value: f64, stat_type: Option<String>, du
 // Get recommended task difficulty based on user stats
 #[tauri::command]
 async fn get_recommended_difficulty(task_category: String) -> Result<i64, String> {
-    initialize_default_data();
+    // TODO: Refactor this command to use database
     
     let user_guard = USER_STATE.lock().unwrap();
     if let Some(ref user) = user_guard.as_ref() {
@@ -967,7 +908,7 @@ async fn get_recommended_difficulty(task_category: String) -> Result<i64, String
 
 #[tauri::command]
 async fn purchase_item(item_id: String, price: i64) -> Result<User, String> {
-    initialize_default_data();
+    // TODO: Refactor this command to use database
     
     let mut user_guard = USER_STATE.lock().unwrap();
     if let Some(ref mut user) = user_guard.as_mut() {
@@ -1382,22 +1323,32 @@ async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEv
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            // Initialize database with performance optimizations on app startup
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = initialize_database().await {
-                    eprintln!("Failed to initialize database: {}", e);
-                } else {
-                    println!("Database initialized successfully with performance optimizations");
+            // Initialize database connection and store in app state
+            let db_conn = tauri::async_runtime::block_on(async {
+                match database::init_database().await {
+                    Ok(conn) => {
+                        println!("Database initialized successfully with performance optimizations");
+                        conn
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to initialize database: {}", e);
+                        panic!("Cannot start app without database");
+                    }
                 }
-                
-                // Start automatic backup scheduling
+            });
+
+            // Store database connection in app state
+            app.manage(db_conn);
+
+            // Start automatic backup scheduling in background
+            tauri::async_runtime::spawn(async move {
                 if let Err(e) = schedule_automatic_backups().await {
                     eprintln!("Failed to start automatic backups: {}", e);
                 } else {
                     println!("Automatic backup system started");
                 }
             });
+
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
