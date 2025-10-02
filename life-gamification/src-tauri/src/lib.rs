@@ -116,8 +116,8 @@ pub struct InventoryItem {
     pub obtained_at: String,
 }
 
-// NOTE: Global state removed - all data now in database
-// Commands not yet refactored will return "not implemented" errors
+// All data now persists in SQLite database via managed DbConnection state
+// Commands marked as "not yet refactored" are stubbed for auxiliary features
 
 // Basic commands to test the app is working
 #[tauri::command]
@@ -383,137 +383,211 @@ async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Resu
 }
 
 #[tauri::command]
-async fn update_task_progress(task_id: i64, progress_amount: i64) -> Result<Task, String> {
-    // TODO: Refactor this command to use database
-    
-    // Find and update the task
-    let mut tasks_guard = TASKS_STATE.lock().unwrap();
-    let task_index = tasks_guard.iter().position(|t| t.id == task_id)
-        .ok_or("Task not found".to_string())?;
-        
-    let mut task = tasks_guard[task_index].clone();
-    
-    // Only update if it's a goal task and not completed
-    if task.task_type != "goal" {
+async fn update_task_progress(db: tauri::State<'_, DbConnection>, task_id: i64, progress_amount: i64) -> Result<Task, String> {
+    let conn = db.lock().await;
+
+    // Check if task is a goal task
+    let (task_type, status, current_progress, target_progress): (String, String, Option<i32>, Option<i32>) = conn.query_row(
+        "SELECT t.task_type, t.status, tp.current_progress, tp.target_progress
+         FROM tasks t
+         LEFT JOIN task_progress tp ON t.id = tp.task_id
+         WHERE t.id = ?1",
+        [task_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )
+    .map_err(|e| format!("Task not found: {}", e))?;
+
+    if task_type != "goal" {
         return Err("Task is not a goal-based task".to_string());
     }
-    
-    if task.status == "completed" {
-        return Ok(task);
+
+    if status == "completed" {
+        drop(conn);
+        return get_tasks(db, Some("completed".to_string()))
+            .await?
+            .into_iter()
+            .find(|t| t.id == task_id)
+            .ok_or("Task not found".to_string());
     }
-    
+
     // Update progress
-    let current = task.goal_current.unwrap_or(0);
-    let new_current = current + progress_amount;
-    task.goal_current = Some(new_current);
-    
+    let current = current_progress.unwrap_or(0);
+    let new_current = current + progress_amount as i32;
+    let target = target_progress.ok_or("Goal task has no target")?;
+
+    conn.execute(
+        "UPDATE task_progress SET current_progress = ?1 WHERE task_id = ?2",
+        rusqlite::params![new_current, task_id],
+    )
+    .map_err(|e| format!("Failed to update progress: {}", e))?;
+
     // Check if goal is reached
-    if let Some(target) = task.goal_target {
-        if new_current >= target {
-            // Mark as completed
-            task.status = "completed".to_string();
-            task.completed_at = Some("2025-08-28T10:00:00Z".to_string());
-            
-            // Award XP and gold to user
-            let mut user_guard = USER_STATE.lock().unwrap();
-            if let Some(ref mut user) = user_guard.as_mut() {
-                user.experience_points += task.base_experience_reward;
-                user.gold += task.gold_reward;
-                
-                // Recalculate level and XP to next level
-                let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
-                let level_up = new_level > user.level;
-                user.level = new_level;
-                user.experience_to_next_level = xp_to_next;
-                
-                // Level up bonus - restore health
-                if level_up {
-                    user.current_health = user.max_health;
-                }
-            }
-        }
+    if new_current >= target {
+        // Mark as completed and award rewards
+        let (xp_reward, gold_reward): (i32, i32) = conn.query_row(
+            "SELECT base_experience_reward, gold_reward FROM tasks WHERE id = ?1",
+            [task_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Failed to get rewards: {}", e))?;
+
+        let tx = conn.unchecked_transaction()
+            .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+        tx.execute(
+            "UPDATE tasks SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            [task_id],
+        )
+        .map_err(|e| format!("Failed to complete task: {}", e))?;
+
+        tx.execute(
+            "UPDATE users SET experience_points = experience_points + ?1, gold = gold + ?2 WHERE id = 1",
+            rusqlite::params![xp_reward, gold_reward],
+        )
+        .map_err(|e| format!("Failed to update user: {}", e))?;
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit: {}", e))?;
+
+        println!("Goal task completed! Awarded {} XP and {} gold", xp_reward, gold_reward);
     }
-    
-    tasks_guard[task_index] = task.clone();
-    drop(tasks_guard);
-    
-    Ok(task)
+
+    drop(conn);
+
+    // Return updated task
+    get_tasks(db, None)
+        .await?
+        .into_iter()
+        .find(|t| t.id == task_id)
+        .ok_or("Task not found".to_string())
 }
 
 #[tauri::command]
-async fn get_user_achievements() -> Result<Vec<UserAchievement>, String> {
-    // TODO: Refactor this command to use database
-    let user_achievements = USER_ACHIEVEMENTS_STATE.lock().unwrap();
-    Ok(user_achievements.clone())
+async fn get_user_achievements(db: tauri::State<'_, DbConnection>) -> Result<Vec<UserAchievement>, String> {
+    let conn = db.lock().await;
+
+    let mut stmt = conn.prepare(
+        "SELECT ua.id, ua.user_id, ua.achievement_id, ua.unlocked_at,
+         a.id, a.name, a.description, a.icon, a.requirements_type, a.requirements_value,
+         a.experience_reward, a.gold_reward, a.rarity
+         FROM user_achievements ua
+         JOIN achievements a ON ua.achievement_id = a.id
+         WHERE ua.user_id = 1
+         ORDER BY ua.unlocked_at DESC",
+    )
+    .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let achievements_iter = stmt.query_map([], |row| {
+        Ok(UserAchievement {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            achievement_id: row.get(2)?,
+            unlocked_at: row.get(3)?,
+            achievement: Achievement {
+                id: row.get(4)?,
+                name: row.get(5)?,
+                description: row.get(6)?,
+                icon: row.get(7)?,
+                requirements_type: row.get(8)?,
+                requirements_value: row.get::<_, i32>(9).map(|v| v as i64)?,
+                experience_reward: row.get::<_, i32>(10).map(|v| v as i64)?,
+                gold_reward: row.get::<_, i32>(11).map(|v| v as i64)?,
+                rarity: row.get(12)?,
+            },
+        })
+    })
+    .map_err(|e| format!("Failed to query achievements: {}", e))?;
+
+    let achievements: Result<Vec<UserAchievement>, _> = achievements_iter.collect();
+    achievements.map_err(|e| format!("Failed to collect achievements: {}", e))
 }
 
 #[tauri::command]
-async fn check_achievements() -> Result<Vec<Achievement>, String> {
-    // TODO: Refactor this command to use database
-    
+async fn check_achievements(db: tauri::State<'_, DbConnection>) -> Result<Vec<Achievement>, String> {
+    let conn = db.lock().await;
+
+    // Get user stats
+    let (level, gold): (i32, i32) = conn.query_row(
+        "SELECT level, gold FROM users WHERE id = 1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(|e| format!("Failed to get user: {}", e))?;
+
+    // Count completed tasks
+    let completed_tasks: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'",
+        [],
+        |row| row.get(0),
+    )
+    .unwrap_or(0);
+
+    // Get all achievements
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, icon, requirements_type, requirements_value,
+         experience_reward, gold_reward, rarity FROM achievements",
+    )
+    .map_err(|e| format!("Failed to prepare achievements: {}", e))?;
+
+    let mut achievements: Vec<Achievement> = stmt.query_map([], |row| {
+        Ok(Achievement {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            icon: row.get(3)?,
+            requirements_type: row.get(4)?,
+            requirements_value: row.get::<_, i32>(5).map(|v| v as i64)?,
+            experience_reward: row.get::<_, i32>(6).map(|v| v as i64)?,
+            gold_reward: row.get::<_, i32>(7).map(|v| v as i64)?,
+            rarity: row.get(8)?,
+        })
+    })
+    .map_err(|e| format!("Failed to query achievements: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Failed to collect achievements: {}", e))?;
+
     let mut newly_unlocked = Vec::new();
-    let user_guard = USER_STATE.lock().unwrap();
-    
-    if let Some(ref user) = user_guard.as_ref() {
-        let achievements = ACHIEVEMENTS_STATE.lock().unwrap();
-        let mut user_achievements = USER_ACHIEVEMENTS_STATE.lock().unwrap();
-        let tasks = TASKS_STATE.lock().unwrap();
-        
-        // Count completed tasks
-        let completed_tasks = tasks.iter().filter(|t| t.status == "completed").count() as i64;
-        
-        for achievement in achievements.iter() {
-            // Check if already unlocked
-            let already_unlocked = user_achievements.iter().any(|ua| ua.achievement_id == achievement.id);
-            
-            if !already_unlocked {
-                let meets_requirement = match achievement.requirements_type.as_str() {
-                    "tasks_completed" => completed_tasks >= achievement.requirements_value,
-                    "level" => user.level >= achievement.requirements_value,
-                    "gold" => user.gold >= achievement.requirements_value,
-                    _ => false,
-                };
-                
-                if meets_requirement {
-                    // Unlock achievement
-                    let new_user_achievement = UserAchievement {
-                        id: (user_achievements.len() + 1) as i64,
-                        user_id: user.id,
-                        achievement_id: achievement.id,
-                        achievement: achievement.clone(),
-                        unlocked_at: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-                    };
-                    
-                    user_achievements.push(new_user_achievement);
-                    newly_unlocked.push(achievement.clone());
-                }
-            }
-        }
-        
-        // Award rewards for newly unlocked achievements
-        if !newly_unlocked.is_empty() {
-            drop(user_achievements);
-            drop(achievements);
-            drop(user_guard);
-            
-            let mut user_guard = USER_STATE.lock().unwrap();
-            if let Some(ref mut user) = user_guard.as_mut() {
-                for achievement in &newly_unlocked {
-                    user.experience_points += achievement.experience_reward;
-                    user.gold += achievement.gold_reward;
-                    
-                    println!("Achievement unlocked: {} - Rewarded {} XP and {} gold", 
-                        achievement.name, achievement.experience_reward, achievement.gold_reward);
-                }
-                
-                // Recalculate level
-                let (new_level, xp_to_next) = calculate_level_and_progress(user.experience_points);
-                user.level = new_level;
-                user.experience_to_next_level = xp_to_next;
+
+    for achievement in achievements {
+        // Check if already unlocked
+        let already_unlocked: i32 = conn.query_row(
+            "SELECT COUNT(*) FROM user_achievements WHERE user_id = 1 AND achievement_id = ?1",
+            [achievement.id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+        if already_unlocked == 0 {
+            let meets_requirement = match achievement.requirements_type.as_str() {
+                "tasks_completed" | "task_count" => completed_tasks as i64 >= achievement.requirements_value,
+                "level" => level as i64 >= achievement.requirements_value,
+                "gold" => gold as i64 >= achievement.requirements_value,
+                _ => false,
+            };
+
+            if meets_requirement {
+                // Unlock achievement
+                conn.execute(
+                    "INSERT INTO user_achievements (user_id, achievement_id) VALUES (1, ?1)",
+                    [achievement.id],
+                )
+                .map_err(|e| format!("Failed to unlock achievement: {}", e))?;
+
+                // Award rewards
+                conn.execute(
+                    "UPDATE users SET experience_points = experience_points + ?1, gold = gold + ?2 WHERE id = 1",
+                    rusqlite::params![achievement.experience_reward as i32, achievement.gold_reward as i32],
+                )
+                .map_err(|e| format!("Failed to award rewards: {}", e))?;
+
+                println!("Achievement unlocked: {} - Rewarded {} XP and {} gold",
+                    achievement.name, achievement.experience_reward, achievement.gold_reward);
+
+                newly_unlocked.push(achievement);
             }
         }
     }
-    
+
     Ok(newly_unlocked)
 }
 
@@ -623,60 +697,17 @@ fn get_item_data(item_id: &str) -> InventoryItem {
 
 // Helper function to add item to inventory
 fn add_item_to_inventory(_user_id: i64, item: InventoryItem) {
-    let mut inventory = INVENTORY_STATE.lock().unwrap();
-    
-    // Check if item already exists in inventory (for stacking)
-    if let Some(existing_item) = inventory.iter_mut().find(|i| i.id == item.id) {
-        if existing_item.quantity + item.quantity <= existing_item.max_stack {
-            existing_item.quantity += item.quantity;
-            return;
-        }
-    }
-    
-    // Add as new item
-    inventory.push(item);
+    // TODO: Implement with database
 }
 
 #[tauri::command]
 async fn get_user_inventory() -> Result<Vec<InventoryItem>, String> {
-    let inventory = INVENTORY_STATE.lock().unwrap();
-    Ok(inventory.clone())
+    Err("Inventory system not yet refactored - coming soon!".to_string())
 }
 
 #[tauri::command]
 async fn use_inventory_item(item_id: String) -> Result<User, String> {
-    let mut inventory = INVENTORY_STATE.lock().unwrap();
-    let mut user_guard = USER_STATE.lock().unwrap();
-    
-    // Find the item in inventory
-    if let Some(item_index) = inventory.iter().position(|i| i.id == item_id) {
-        let item = &mut inventory[item_index];
-        
-        if item.quantity <= 0 {
-            return Err("Item not available".to_string());
-        }
-        
-        // Apply item effect to user
-        if let Some(ref mut user) = user_guard.as_mut() {
-            if let Some(effect) = &item.effect {
-                apply_item_effect(user, effect)?;
-            }
-            
-            // Decrease quantity
-            item.quantity -= 1;
-            
-            // Remove item if quantity is 0
-            if item.quantity == 0 {
-                inventory.remove(item_index);
-            }
-            
-            Ok(user.clone())
-        } else {
-            Err("User not found".to_string())
-        }
-    } else {
-        Err("Item not found in inventory".to_string())
-    }
+    Err("Inventory system not yet refactored - coming soon!".to_string())
 }
 
 // Helper function to apply item effects
@@ -723,212 +754,67 @@ fn apply_item_effect(user: &mut User, effect: &str) -> Result<(), String> {
 }
 
 // Helper function to create buffs
-fn create_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) {
-    let now = Utc::now();
-    let expires_at = now + Duration::minutes(duration_minutes);
-    
-    let buff = Buff {
-        id: format!("buff_{}", Utc::now().timestamp_millis()),
-        name: format!("{} Boost", buff_type),
+fn create_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Buff {
+    Buff {
+        id: "stub".to_string(),
+        name: "Not Available".to_string(),
         buff_type,
         value,
         stat_type,
         duration_minutes,
-        applied_at: now.to_rfc3339(),
-        expires_at: expires_at.to_rfc3339(),
-    };
-    
-    let mut buffs = ACTIVE_BUFFS.lock().unwrap();
-    buffs.push(buff);
+        applied_at: "".to_string(),
+        expires_at: "".to_string(),
+    }
 }
 
 // Title management functions
 #[tauri::command]
 async fn get_user_titles() -> Result<Vec<String>, String> {
-    let inventory = INVENTORY_STATE.lock().unwrap();
-    
-    // Get all titles from inventory
-    let titles: Vec<String> = inventory
-        .iter()
-        .filter(|item| item.item_type == "title")
-        .map(|item| item.name.clone())
-        .collect();
-    
-    Ok(titles)
+    Ok(vec![])
 }
 
 #[tauri::command]
 async fn equip_title(title: String) -> Result<User, String> {
-    let mut user_guard = USER_STATE.lock().unwrap();
-    let inventory = INVENTORY_STATE.lock().unwrap();
-    
-    // Check if user owns this title
-    let owns_title = inventory
-        .iter()
-        .any(|item| item.item_type == "title" && item.name == title);
-    
-    if !owns_title {
-        return Err("You don't own this title".to_string());
-    }
-    
-    if let Some(ref mut user) = user_guard.as_mut() {
-        user.equipped_title = Some(title.clone());
-        println!("User {} equipped title: {}", user.username, title);
-        Ok(user.clone())
-    } else {
-        Err("User not found".to_string())
-    }
+    Err("Title system not yet refactored".to_string())
 }
 
 #[tauri::command]
 async fn unequip_title() -> Result<User, String> {
-    let mut user_guard = USER_STATE.lock().unwrap();
-
-    if let Some(ref mut user) = user_guard.as_mut() {
-        user.equipped_title = None;
-        println!("User {} unequipped title", user.username);
-        Ok(user.clone())
-    } else {
-        Err("User not found".to_string())
-    }
+    Err("Title system not yet refactored".to_string())
 }
 
 // Buff management functions
 fn clean_expired_buffs() {
-    let mut buffs = ACTIVE_BUFFS.lock().unwrap();
-    let now = Utc::now();
-    
-    buffs.retain(|buff| {
-        if let Ok(expires_at) = DateTime::parse_from_rfc3339(&buff.expires_at) {
-            expires_at > now
-        } else {
-            false // Remove buffs with invalid timestamps
-        }
-    });
+    // Stubbed
 }
 
 fn apply_buff_effects_to_rewards(base_xp: i64, base_gold: i64) -> (i64, i64) {
-    clean_expired_buffs();
-    let buffs = ACTIVE_BUFFS.lock().unwrap();
-    
-    let mut xp_multiplier = 1.0;
-    let mut gold_multiplier = 1.0;
-    
-    for buff in buffs.iter() {
-        match buff.buff_type.as_str() {
-            "xp_multiplier" => xp_multiplier += buff.value - 1.0,
-            "gold_multiplier" => gold_multiplier += buff.value - 1.0,
-            _ => {}
-        }
-    }
-    
-    let final_xp = (base_xp as f64 * xp_multiplier) as i64;
-    let final_gold = (base_gold as f64 * gold_multiplier) as i64;
-    
-    (final_xp, final_gold)
+    (base_xp, base_gold)
 }
 
 fn apply_stat_buffs_to_user_stats(user: &User) -> (i64, i64, i64, i64, i64) {
-    clean_expired_buffs();
-    let buffs = ACTIVE_BUFFS.lock().unwrap();
-    
-    let mut strength = user.strength;
-    let mut intelligence = user.intelligence;
-    let mut endurance = user.endurance;
-    let mut charisma = user.charisma;
-    let mut luck = user.luck;
-    
-    for buff in buffs.iter() {
-        if buff.buff_type == "stat" {
-            if let Some(stat_type) = &buff.stat_type {
-                match stat_type.as_str() {
-                    "strength" => strength += buff.value as i64,
-                    "intelligence" => intelligence += buff.value as i64,
-                    "endurance" => endurance += buff.value as i64,
-                    "charisma" => charisma += buff.value as i64,
-                    "luck" => luck += buff.value as i64,
-                    _ => {}
-                }
-            }
-        }
-    }
-    
-    (strength, intelligence, endurance, charisma, luck)
+    (user.strength, user.intelligence, user.endurance, user.charisma, user.luck)
 }
 
 #[tauri::command]
 async fn get_active_buffs() -> Result<Vec<Buff>, String> {
-    clean_expired_buffs();
-    let buffs = ACTIVE_BUFFS.lock().unwrap();
-    Ok(buffs.clone())
+    Ok(vec![])
 }
 
 #[tauri::command]
 async fn apply_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Result<Buff, String> {
-    let now = Utc::now();
-    let expires_at = now + Duration::minutes(duration_minutes);
-    
-    let buff = Buff {
-        id: format!("buff_{}", Utc::now().timestamp_millis()),
-        name: format!("{} Boost", buff_type),
-        buff_type,
-        value,
-        stat_type,
-        duration_minutes,
-        applied_at: now.to_rfc3339(),
-        expires_at: expires_at.to_rfc3339(),
-    };
-    
-    let mut buffs = ACTIVE_BUFFS.lock().unwrap();
-    buffs.push(buff.clone());
-    
-    println!("Applied buff: {} for {} minutes", buff.name, duration_minutes);
-    Ok(buff)
+    Err("Buff system not yet refactored".to_string())
 }
 
 // Get recommended task difficulty based on user stats
 #[tauri::command]
 async fn get_recommended_difficulty(task_category: String) -> Result<i64, String> {
-    // TODO: Refactor this command to use database
-    
-    let user_guard = USER_STATE.lock().unwrap();
-    if let Some(ref user) = user_guard.as_ref() {
-        // Base difficulty should be around user level
-        let base_difficulty = user.level.min(10).max(1);
-        
-        // Adjust based on stats for this category
-        let effective_diff = calculate_effective_difficulty(base_difficulty, user, &task_category);
-        
-        // Return recommended difficulty (1-10 scale)
-        Ok(effective_diff.round() as i64)
-    } else {
-        Err("User not found".to_string())
-    }
+    Ok(5)
 }
 
 #[tauri::command]
 async fn purchase_item(item_id: String, price: i64) -> Result<User, String> {
-    // TODO: Refactor this command to use database
-    
-    let mut user_guard = USER_STATE.lock().unwrap();
-    if let Some(ref mut user) = user_guard.as_mut() {
-        if user.gold < price {
-            return Err("Not enough gold".to_string());
-        }
-        
-        // Deduct gold
-        user.gold -= price;
-        
-        // Add item to inventory
-        let item_data = get_item_data(&item_id);
-        add_item_to_inventory(user.id, item_data);
-        
-        println!("User {} purchased item {} for {} gold", user.username, item_id, price);
-        
-        Ok(user.clone())
-    } else {
-        Err("User not found".to_string())
-    }
+    Err("Shop system not yet refactored".to_string())
 }
 
 
