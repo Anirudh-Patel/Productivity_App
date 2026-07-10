@@ -537,7 +537,7 @@ export const usePerformanceMonitor = () => {
     trackRender: (componentName: string, renderTime: number) => {
       performanceMonitor.trackComponentRender(componentName, renderTime);
     },
-    measureAsync: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+    measureAsync: async <T,>(name: string, fn: () => Promise<T>): Promise<T> => {
       const start = performance.now();
       try {
         const result = await fn();
