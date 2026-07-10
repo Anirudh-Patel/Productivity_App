@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Sword, Zap, Repeat, Calendar, Clock } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { DIFFICULTY_LEVELS, RecurrencePattern } from '../../../types';
@@ -13,7 +13,7 @@ interface CreateTaskModalProps {
 }
 
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
-  const { createTask, updateEstimatedTime, user, tasks } = useGameStore();
+  const { createTask, updateEstimatedTime, user, tasks, projects, fetchProjects } = useGameStore();
   const [loading, setLoading] = useState(false);
   const [estimatedMinutes, setEstimatedMinutes] = useState<string>('');
   const [modalTab, setModalTab] = useState<'manual' | 'quick'>('quick');
@@ -33,6 +33,15 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
   });
 
   const defaultPatterns = createDefaultRecurrencePatterns();
+
+  // Ensure projects are available for the assignment dropdown.
+  useEffect(() => {
+    if (isOpen && projects.all.length === 0 && !projects.loading) {
+      fetchProjects();
+    }
+  }, [isOpen, projects.all.length, projects.loading, fetchProjects]);
+
+  const activeProjects = projects.all.filter((p) => p.status === 'active');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +77,7 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         difficulty: 5,
         priority: 3,
         task_type: 'standard',
+        project_id: undefined,
       });
       setEstimatedMinutes('');
       setTaskType('standard');
@@ -205,6 +215,33 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
                   <option value="social">Social</option>
                 </select>
               </div>
+
+              {/* Project */}
+              {activeProjects.length > 0 && (
+                <div>
+                  <label htmlFor="project" className="block text-sm font-medium mb-2">
+                    Project
+                  </label>
+                  <select
+                    id="project"
+                    value={formData.project_id ?? ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        project_id: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                  >
+                    <option value="">No project</option>
+                    {activeProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.icon} {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Task Type */}
               <div>
