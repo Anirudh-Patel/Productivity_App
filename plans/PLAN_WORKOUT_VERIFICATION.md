@@ -38,3 +38,7 @@ Steps/rings/sleep, Strava, direct HealthKit, background daemon when app closed.
 
 - `cargo check` + `npm run build` pass; parser unit tests on fixtures pass.
 - Drop fixture JSON into watched folder → scan → workout rows appear; fitness task with matching requirement auto-completes with bonus XP.
+
+## Addendum (2026-07-10, user input)
+
+User has an Apple Watch — primary workout source. Watch workouts land in iPhone HealthKit automatically; the Health Auto Export → iCloud Drive → folder-watch pipeline above covers them unchanged. Setup steps for user documented in main conversation: install Health Auto Export on iPhone, automate workout JSON export to iCloud folder, set folder in Settings → Health.
