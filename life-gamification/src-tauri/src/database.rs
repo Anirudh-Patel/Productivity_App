@@ -65,34 +65,9 @@ pub struct UserAchievement {
     pub unlocked_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InventoryItem {
-    pub id: i64,
-    pub user_id: i64,
-    pub name: String,
-    pub description: Option<String>,
-    pub item_type: String,
-    pub rarity: String,
-    pub quantity: i32,
-    pub price: i32,
-    pub effects: Option<String>, // JSON string
-    pub icon: Option<String>,
-    pub color: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Buff {
-    pub id: i64,
-    pub user_id: i64,
-    pub name: String,
-    pub description: Option<String>,
-    pub buff_type: String,
-    pub effect_value: f64,
-    pub affected_stat: Option<String>,
-    pub expires_at: String,
-    pub source: Option<String>,
-    pub source_id: Option<i64>,
-}
+// Inventory and buff persistence is implemented directly in the lib.rs commands
+// (purchase_item, use_inventory_item, get_user_inventory, apply_buff, get_active_buffs)
+// using transactional SQL against inventory_items / active_buffs / user_titles.
 
 // Database initialization and migration
 pub async fn init_database() -> Result<DbConnection, String> {
@@ -384,72 +359,6 @@ pub async fn complete_task(conn: &DbConnection, task_id: i64, user_id: i64) -> R
     Ok((xp_reward, gold_reward))
 }
 
-pub async fn get_inventory(conn: &DbConnection, user_id: i64) -> Result<Vec<InventoryItem>, String> {
-    let conn = conn.lock().await;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, user_id, name, description, item_type, rarity, quantity, price, effects, icon, color
-         FROM inventory_items WHERE user_id = ?1 ORDER BY item_type, name",
-    )
-    .map_err(|e| format!("Failed to prepare inventory query: {}", e))?;
-
-    let item_iter = stmt.query_map([user_id], |row| {
-        Ok(InventoryItem {
-            id: row.get(0)?,
-            user_id: row.get(1)?,
-            name: row.get(2)?,
-            description: row.get(3)?,
-            item_type: row.get(4)?,
-            rarity: row.get(5)?,
-            quantity: row.get(6)?,
-            price: row.get(7)?,
-            effects: row.get(8)?,
-            icon: row.get(9)?,
-            color: row.get(10)?,
-        })
-    })
-    .map_err(|e| format!("Failed to query inventory: {}", e))?;
-
-    let items: Result<Vec<InventoryItem>, _> = item_iter.collect();
-    items.map_err(|e| format!("Failed to collect inventory: {}", e))
-}
-
-pub async fn get_active_buffs(conn: &DbConnection, user_id: i64) -> Result<Vec<Buff>, String> {
-    let conn = conn.lock().await;
-
-    // Clean up expired buffs first
-    conn.execute(
-        "DELETE FROM active_buffs WHERE expires_at < datetime('now')",
-        [],
-    )
-    .map_err(|e| format!("Failed to clean expired buffs: {}", e))?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, user_id, name, description, buff_type, effect_value, affected_stat, expires_at, source, source_id
-         FROM active_buffs WHERE user_id = ?1 AND expires_at > datetime('now')",
-    )
-    .map_err(|e| format!("Failed to prepare buffs query: {}", e))?;
-
-    let buff_iter = stmt.query_map([user_id], |row| {
-        Ok(Buff {
-            id: row.get(0)?,
-            user_id: row.get(1)?,
-            name: row.get(2)?,
-            description: row.get(3)?,
-            buff_type: row.get(4)?,
-            effect_value: row.get(5)?,
-            affected_stat: row.get(6)?,
-            expires_at: row.get(7)?,
-            source: row.get(8)?,
-            source_id: row.get(9)?,
-        })
-    })
-    .map_err(|e| format!("Failed to query buffs: {}", e))?;
-
-    let buffs: Result<Vec<Buff>, _> = buff_iter.collect();
-    buffs.map_err(|e| format!("Failed to collect buffs: {}", e))
-}
-
 pub async fn get_all_achievements(conn: &DbConnection) -> Result<Vec<Achievement>, String> {
     let conn = conn.lock().await;
 
@@ -564,107 +473,4 @@ pub async fn update_task_progress(conn: &DbConnection, task_id: i64, current_pro
     .map_err(|e| format!("Failed to update task progress: {}", e))?;
 
     Ok(())
-}
-
-pub async fn add_inventory_item(conn: &DbConnection, item: &InventoryItem) -> Result<i64, String> {
-    let conn = conn.lock().await;
-
-    // Check if item already exists
-    let existing: Result<i64, _> = conn.query_row(
-        "SELECT id FROM inventory_items WHERE user_id = ?1 AND name = ?2",
-        rusqlite::params![item.user_id, item.name],
-        |row| row.get(0),
-    );
-
-    match existing {
-        Ok(id) => {
-            // Update quantity
-            conn.execute(
-                "UPDATE inventory_items SET quantity = quantity + ?1 WHERE id = ?2",
-                rusqlite::params![item.quantity, id],
-            )
-            .map_err(|e| format!("Failed to update inventory quantity: {}", e))?;
-            Ok(id)
-        }
-        Err(_) => {
-            // Insert new item
-            conn.execute(
-                "INSERT INTO inventory_items (user_id, name, description, item_type, rarity, quantity, price, effects, icon, color)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                rusqlite::params![
-                    item.user_id,
-                    item.name,
-                    item.description,
-                    item.item_type,
-                    item.rarity,
-                    item.quantity,
-                    item.price,
-                    item.effects,
-                    item.icon,
-                    item.color,
-                ],
-            )
-            .map_err(|e| format!("Failed to insert inventory item: {}", e))?;
-            Ok(conn.last_insert_rowid())
-        }
-    }
-}
-
-pub async fn remove_inventory_item(conn: &DbConnection, user_id: i64, item_name: &str, quantity: i32) -> Result<(), String> {
-    let conn = conn.lock().await;
-
-    // Get current quantity
-    let current_quantity: i32 = conn.query_row(
-        "SELECT quantity FROM inventory_items WHERE user_id = ?1 AND name = ?2",
-        rusqlite::params![user_id, item_name],
-        |row| row.get(0),
-    )
-    .map_err(|e| format!("Item not found in inventory: {}", e))?;
-
-    if current_quantity < quantity {
-        return Err(format!("Not enough items to remove. Have {}, trying to remove {}", current_quantity, quantity));
-    }
-
-    let new_quantity = current_quantity - quantity;
-
-    if new_quantity == 0 {
-        // Remove item completely
-        conn.execute(
-            "DELETE FROM inventory_items WHERE user_id = ?1 AND name = ?2",
-            rusqlite::params![user_id, item_name],
-        )
-        .map_err(|e| format!("Failed to delete inventory item: {}", e))?;
-    } else {
-        // Update quantity
-        conn.execute(
-            "UPDATE inventory_items SET quantity = ?1 WHERE user_id = ?2 AND name = ?3",
-            rusqlite::params![new_quantity, user_id, item_name],
-        )
-        .map_err(|e| format!("Failed to update inventory quantity: {}", e))?;
-    }
-
-    Ok(())
-}
-
-pub async fn add_buff(conn: &DbConnection, buff: &Buff) -> Result<i64, String> {
-    let conn = conn.lock().await;
-
-    conn.execute(
-        "INSERT INTO active_buffs (user_id, name, description, buff_type, effect_value, affected_stat, expires_at, source, source_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        rusqlite::params![
-            buff.user_id,
-            buff.name,
-            buff.description,
-            buff.buff_type,
-            buff.effect_value,
-            buff.affected_stat,
-            buff.expires_at,
-            buff.source,
-            buff.source_id,
-        ],
-    )
-    .map_err(|e| format!("Failed to insert buff: {}", e))?;
-
-    Ok(conn.last_insert_rowid())
 }

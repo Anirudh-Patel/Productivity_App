@@ -362,11 +362,10 @@ fn calculate_level_and_progress(xp: i64) -> (i64, i64) {
 //     // This function is no longer needed as all data is persisted in the database
 // }
 
-#[tauri::command]
-async fn get_user(db: tauri::State<'_, DbConnection>) -> Result<User, String> {
-    let conn = db.lock().await;
-
-    let user = conn.query_row(
+// Fetch the primary user using an already-open connection.
+// Shared by get_user, purchase_item, use_inventory_item, equip_title and unequip_title.
+fn fetch_user_sync(conn: &Connection) -> Result<User, String> {
+    conn.query_row(
         "SELECT id, username, level, experience_points, experience_to_next_level,
          strength, intelligence, endurance, charisma, luck,
          current_health, max_health, gold, theme_preference, equipped_title
@@ -376,25 +375,29 @@ async fn get_user(db: tauri::State<'_, DbConnection>) -> Result<User, String> {
             Ok(User {
                 id: row.get::<_, i64>(0)?,
                 username: row.get(1)?,
-                level: row.get::<_, i32>(2).map(|v| v as i64)?,
-                experience_points: row.get::<_, i32>(3).map(|v| v as i64)?,
-                experience_to_next_level: row.get::<_, i32>(4).map(|v| v as i64)?,
-                strength: row.get::<_, i32>(5).map(|v| v as i64)?,
-                intelligence: row.get::<_, i32>(6).map(|v| v as i64)?,
-                endurance: row.get::<_, i32>(7).map(|v| v as i64)?,
-                charisma: row.get::<_, i32>(8).map(|v| v as i64)?,
-                luck: row.get::<_, i32>(9).map(|v| v as i64)?,
-                current_health: row.get::<_, i32>(10).map(|v| v as i64)?,
-                max_health: row.get::<_, i32>(11).map(|v| v as i64)?,
-                gold: row.get::<_, i32>(12).map(|v| v as i64)?,
+                level: row.get::<_, i64>(2)?,
+                experience_points: row.get::<_, i64>(3)?,
+                experience_to_next_level: row.get::<_, i64>(4)?,
+                strength: row.get::<_, i64>(5)?,
+                intelligence: row.get::<_, i64>(6)?,
+                endurance: row.get::<_, i64>(7)?,
+                charisma: row.get::<_, i64>(8)?,
+                luck: row.get::<_, i64>(9)?,
+                current_health: row.get::<_, i64>(10)?,
+                max_health: row.get::<_, i64>(11)?,
+                gold: row.get::<_, i64>(12)?,
                 theme_preference: row.get(13)?,
                 equipped_title: row.get(14)?,
             })
         },
     )
-    .map_err(|e| format!("Failed to get user: {}", e))?;
+    .map_err(|e| format!("Failed to get user: {}", e))
+}
 
-    Ok(user)
+#[tauri::command]
+async fn get_user(db: tauri::State<'_, DbConnection>) -> Result<User, String> {
+    let conn = db.lock().await;
+    fetch_user_sync(&conn)
 }
 
 #[tauri::command]
@@ -572,17 +575,13 @@ async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Resu
             drop(tx);
             // Already completed, will fetch and return below
         } else {
-            // Get user stats for bonus calculations
-            let (intelligence, luck): (i32, i32) = tx.query_row(
-                "SELECT intelligence, luck FROM users WHERE id = 1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(|e| format!("Failed to get user stats: {}", e))?;
+            // Get user stats for bonus calculations (including skill tree and active stat buffs)
+            let user = fetch_user_sync(&tx)?;
+            let (_, buffed_int, _, _, buffed_luck) = apply_stat_buffs_to_user_stats(&user);
 
             // Calculate stat bonuses
-            let int_bonus = intelligence as f64 * 0.02; // 2% XP bonus per INT point
-            let luck_bonus = luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
+            let int_bonus = buffed_int as f64 * 0.02; // 2% XP bonus per INT point
+            let luck_bonus = buffed_luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
 
             // Calculate streak bonus for recurring tasks
             let (new_streak, streak_multiplier) = if parent_recurring_id.is_some() {
@@ -625,8 +624,11 @@ async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Resu
                 (0, 1.0) // Not a recurring task
             };
 
-            let final_xp = (xp_reward as f64 * (1.0 + int_bonus) * streak_multiplier) as i32;
-            let final_gold = (gold_reward as f64 * (1.0 + luck_bonus)) as i32;
+            let stat_xp = (xp_reward as f64 * (1.0 + int_bonus) * streak_multiplier) as i64;
+            let stat_gold = (gold_reward as f64 * (1.0 + luck_bonus)) as i64;
+
+            // Apply any active XP/gold buff multipliers (persisted in active_buffs)
+            let (final_xp, final_gold) = apply_buff_effects_to_rewards(stat_xp, stat_gold);
 
             // Mark task as completed and update streak fields for recurring tasks
             if parent_recurring_id.is_some() {
@@ -1882,101 +1884,356 @@ fn get_item_data(item_id: &str) -> InventoryItem {
     }
 }
 
-// Helper function to add item to inventory
-fn add_item_to_inventory(_user_id: i64, item: InventoryItem) {
-    // TODO: Implement with database
+// ===== Inventory commands (persisted in inventory_items, catalog id stored in `name`) =====
+
+// Convert SQLite "YYYY-MM-DD HH:MM:SS" timestamps to ISO 8601 for the frontend
+fn sqlite_datetime_to_iso(ts: &str) -> String {
+    if ts.contains('T') {
+        ts.to_string()
+    } else {
+        format!("{}Z", ts.replacen(' ', "T", 1))
+    }
 }
 
 #[tauri::command]
-async fn get_user_inventory() -> Result<Vec<InventoryItem>, String> {
-    Err("Inventory system not yet refactored - coming soon!".to_string())
+async fn get_user_inventory(db: tauri::State<'_, DbConnection>) -> Result<Vec<InventoryItem>, String> {
+    let conn = db.lock().await;
+
+    let mut stmt = conn.prepare(
+        "SELECT name, quantity, created_at FROM inventory_items
+         WHERE user_id = 1 ORDER BY item_type, name"
+    ).map_err(|e| format!("Failed to prepare inventory query: {}", e))?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    }).map_err(|e| format!("Failed to query inventory: {}", e))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let (item_id, quantity, created_at) = row
+            .map_err(|e| format!("Failed to read inventory row: {}", e))?;
+        // The `name` column stores the catalog item id; metadata comes from the catalog
+        let mut item = get_item_data(&item_id);
+        item.quantity = quantity;
+        item.obtained_at = sqlite_datetime_to_iso(&created_at);
+        items.push(item);
+    }
+
+    Ok(items)
 }
 
 #[tauri::command]
-async fn use_inventory_item(item_id: String) -> Result<User, String> {
-    Err("Inventory system not yet refactored - coming soon!".to_string())
+async fn use_inventory_item(db: tauri::State<'_, DbConnection>, item_id: String) -> Result<User, String> {
+    let conn = db.lock().await;
+
+    let tx = conn.unchecked_transaction()
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    let quantity: i64 = tx.query_row(
+        "SELECT quantity FROM inventory_items WHERE user_id = 1 AND name = ?1",
+        [&item_id],
+        |row| row.get(0),
+    ).map_err(|_| format!("Item '{}' not found in inventory", item_id))?;
+
+    let item = get_item_data(&item_id);
+    if item.item_type != "consumable" {
+        return Err(format!("{} cannot be used directly", item.name));
+    }
+
+    // Consume one item
+    if quantity <= 1 {
+        tx.execute(
+            "DELETE FROM inventory_items WHERE user_id = 1 AND name = ?1",
+            [&item_id],
+        ).map_err(|e| format!("Failed to remove item: {}", e))?;
+    } else {
+        tx.execute(
+            "UPDATE inventory_items SET quantity = quantity - 1, updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = 1 AND name = ?1",
+            [&item_id],
+        ).map_err(|e| format!("Failed to update item quantity: {}", e))?;
+    }
+
+    // Apply the item's effect
+    if let Some(effect) = &item.effect {
+        apply_item_effect(&tx, effect, &item.name)?;
+    }
+
+    tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    fetch_user_sync(&conn)
 }
 
-// Helper function to apply item effects
-fn apply_item_effect(user: &mut User, effect: &str) -> Result<(), String> {
+// Apply an item effect string (e.g. "restore_health:25", "xp_multiplier:2.0:30",
+// "stat_boost:strength:10:45") against the database
+fn apply_item_effect(conn: &Connection, effect: &str, source_name: &str) -> Result<(), String> {
     let parts: Vec<&str> = effect.split(':').collect();
-    
+
     match parts[0] {
         "restore_health" => {
-            if let Ok(amount) = parts[1].parse::<i64>() {
-                user.current_health = std::cmp::min(user.max_health, user.current_health + amount);
-                println!("Restored {} health to user {}", amount, user.username);
-            }
+            let amount: i64 = parts.get(1).and_then(|p| p.parse().ok())
+                .ok_or_else(|| format!("Invalid effect format: {}", effect))?;
+            conn.execute(
+                "UPDATE users SET current_health = MIN(max_health, current_health + ?1) WHERE id = 1",
+                [amount],
+            ).map_err(|e| format!("Failed to restore health: {}", e))?;
+            println!("Restored {} health", amount);
         },
-        "xp_multiplier" => {
-            if parts.len() >= 3 {
-                if let (Ok(multiplier), Ok(duration)) = (parts[1].parse::<f64>(), parts[2].parse::<i64>()) {
-                    create_buff("xp_multiplier".to_string(), multiplier, None, duration);
-                    println!("Applied {}x XP multiplier for {} minutes", multiplier, duration);
-                }
+        "xp_multiplier" | "gold_multiplier" => {
+            if parts.len() < 3 {
+                return Err(format!("Invalid effect format: {}", effect));
             }
-        },
-        "gold_multiplier" => {
-            if parts.len() >= 3 {
-                if let (Ok(multiplier), Ok(duration)) = (parts[1].parse::<f64>(), parts[2].parse::<i64>()) {
-                    create_buff("gold_multiplier".to_string(), multiplier, None, duration);
-                    println!("Applied {}x Gold multiplier for {} minutes", multiplier, duration);
-                }
-            }
+            let multiplier: f64 = parts[1].parse()
+                .map_err(|_| format!("Invalid effect format: {}", effect))?;
+            let duration: i64 = parts[2].parse()
+                .map_err(|_| format!("Invalid effect format: {}", effect))?;
+            insert_buff(conn, parts[0], multiplier, None, duration, Some(source_name))?;
+            println!("Applied {}x {} for {} minutes", multiplier, parts[0], duration);
         },
         "stat_boost" => {
-            if parts.len() >= 4 {
-                if let (Ok(amount), Ok(duration)) = (parts[2].parse::<f64>(), parts[3].parse::<i64>()) {
-                    create_buff("stat".to_string(), amount, Some(parts[1].to_string()), duration);
-                    println!("Applied +{} {} boost for {} minutes", amount, parts[1], duration);
-                }
+            if parts.len() < 4 {
+                return Err(format!("Invalid effect format: {}", effect));
             }
+            let amount: f64 = parts[2].parse()
+                .map_err(|_| format!("Invalid effect format: {}", effect))?;
+            let duration: i64 = parts[3].parse()
+                .map_err(|_| format!("Invalid effect format: {}", effect))?;
+            insert_buff(conn, "stat", amount, Some(parts[1].to_string()), duration, Some(source_name))?;
+            println!("Applied +{} {} boost for {} minutes", amount, parts[1], duration);
         },
         _ => {
             return Err("Unknown item effect".to_string());
         }
     }
-    
+
     Ok(())
 }
 
-// Helper function to create buffs
-fn create_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Buff {
-    Buff {
-        id: "stub".to_string(),
-        name: "Not Available".to_string(),
-        buff_type,
-        value,
-        stat_type,
-        duration_minutes,
-        applied_at: "".to_string(),
-        expires_at: "".to_string(),
+// ===== Buff persistence helpers (active_buffs table) =====
+
+// The active_buffs table CHECK-constrains buff_type; map between the frontend
+// naming ("xp_multiplier"/"gold_multiplier"/"stat") and the DB naming.
+fn buff_type_to_db(buff_type: &str) -> &'static str {
+    match buff_type {
+        "xp_multiplier" | "xp_boost" => "xp_boost",
+        "gold_multiplier" | "gold_boost" => "gold_boost",
+        "stat" | "stat_boost" => "stat_boost",
+        "health_regen" => "health_regen",
+        _ => "other",
     }
 }
 
-// Title management functions
-#[tauri::command]
-async fn get_user_titles() -> Result<Vec<String>, String> {
-    Ok(vec![])
+fn buff_type_from_db(db_type: &str) -> String {
+    match db_type {
+        "xp_boost" => "xp_multiplier".to_string(),
+        "gold_boost" => "gold_multiplier".to_string(),
+        "stat_boost" => "stat".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn buff_display_name(buff_type: &str, stat_type: &Option<String>) -> String {
+    match buff_type_to_db(buff_type) {
+        "xp_boost" => "XP Boost".to_string(),
+        "gold_boost" => "Gold Boost".to_string(),
+        "stat_boost" => match stat_type {
+            Some(stat) => {
+                let mut chars = stat.chars();
+                let capitalized = match chars.next() {
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                    None => String::new(),
+                };
+                format!("{} Boost", capitalized)
+            }
+            None => "Stat Boost".to_string(),
+        },
+        "health_regen" => "Health Regeneration".to_string(),
+        _ => "Mysterious Buff".to_string(),
+    }
+}
+
+// Insert a buff row into active_buffs and return it in the frontend Buff shape.
+// Timestamps are stored as "YYYY-MM-DD HH:MM:SS" (UTC) so they compare correctly
+// against SQLite's datetime('now') / CURRENT_TIMESTAMP.
+fn insert_buff(
+    conn: &Connection,
+    buff_type: &str,
+    value: f64,
+    stat_type: Option<String>,
+    duration_minutes: i64,
+    source: Option<&str>,
+) -> Result<Buff, String> {
+    let name = buff_display_name(buff_type, &stat_type);
+    let applied_at = Utc::now();
+    let expires_at = applied_at + Duration::minutes(duration_minutes);
+    let applied_str = applied_at.format("%Y-%m-%d %H:%M:%S").to_string();
+    let expires_str = expires_at.format("%Y-%m-%d %H:%M:%S").to_string();
+
+    conn.execute(
+        "INSERT INTO active_buffs (user_id, name, description, buff_type, effect_value,
+         affected_stat, started_at, expires_at, source)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![
+            name,
+            format!("Active for {} minutes", duration_minutes),
+            buff_type_to_db(buff_type),
+            value,
+            stat_type,
+            applied_str,
+            expires_str,
+            source,
+        ],
+    ).map_err(|e| format!("Failed to insert buff: {}", e))?;
+
+    Ok(Buff {
+        id: conn.last_insert_rowid().to_string(),
+        name,
+        buff_type: buff_type_from_db(buff_type_to_db(buff_type)),
+        value,
+        stat_type,
+        duration_minutes,
+        applied_at: sqlite_datetime_to_iso(&applied_str),
+        expires_at: sqlite_datetime_to_iso(&expires_str),
+    })
+}
+
+// ===== Title commands (derived titles + user_titles table, equipped in users.equipped_title) =====
+
+// Titles are derived from level and unlocked achievements, plus any title items
+// owned in the inventory and titles recorded in the user_titles table.
+fn compute_user_titles(conn: &Connection) -> Result<Vec<String>, String> {
+    let level: i64 = conn.query_row(
+        "SELECT level FROM users WHERE id = 1",
+        [],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to get user level: {}", e))?;
+
+    let achievement_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM user_achievements WHERE user_id = 1",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    let mut titles: Vec<String> = Vec::new();
+
+    // Level-derived titles
+    let level_titles: [(i64, &str); 6] = [
+        (1, "Adventurer"),
+        (5, "Rising Hero"),
+        (10, "Veteran Adventurer"),
+        (20, "Elite Champion"),
+        (35, "Legendary Hero"),
+        (50, "Ascended Legend"),
+    ];
+    for (required_level, title) in level_titles {
+        if level >= required_level {
+            titles.push(title.to_string());
+        }
+    }
+
+    // Achievement-derived titles
+    let achievement_titles: [(i64, &str); 3] = [
+        (1, "Achievement Hunter"),
+        (5, "Trophy Collector"),
+        (10, "Completionist"),
+    ];
+    for (required_count, title) in achievement_titles {
+        if achievement_count >= required_count {
+            titles.push(title.to_string());
+        }
+    }
+
+    // Title items owned in the inventory (display name comes from the catalog)
+    let mut stmt = conn.prepare(
+        "SELECT name FROM inventory_items WHERE user_id = 1 AND item_type = 'title'"
+    ).map_err(|e| format!("Failed to prepare title items query: {}", e))?;
+    let item_ids = stmt.query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Failed to query title items: {}", e))?;
+    for item_id in item_ids.flatten() {
+        let title = get_item_data(&item_id).name;
+        if !titles.contains(&title) {
+            titles.push(title);
+        }
+    }
+
+    // Titles recorded in the user_titles table
+    let mut stmt = conn.prepare(
+        "SELECT title FROM user_titles WHERE user_id = 1 ORDER BY unlocked_at"
+    ).map_err(|e| format!("Failed to prepare user titles query: {}", e))?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Failed to query user titles: {}", e))?;
+    for title in rows.flatten() {
+        if !titles.contains(&title) {
+            titles.push(title);
+        }
+    }
+
+    Ok(titles)
 }
 
 #[tauri::command]
-async fn equip_title(title: String) -> Result<User, String> {
-    Err("Title system not yet refactored".to_string())
+async fn get_user_titles(db: tauri::State<'_, DbConnection>) -> Result<Vec<String>, String> {
+    let conn = db.lock().await;
+    compute_user_titles(&conn)
 }
 
 #[tauri::command]
-async fn unequip_title() -> Result<User, String> {
-    Err("Title system not yet refactored".to_string())
+async fn equip_title(db: tauri::State<'_, DbConnection>, title: String) -> Result<User, String> {
+    let conn = db.lock().await;
+
+    let owned_titles = compute_user_titles(&conn)?;
+    if !owned_titles.contains(&title) {
+        return Err(format!("Title '{}' has not been unlocked", title));
+    }
+
+    conn.execute(
+        "UPDATE users SET equipped_title = ?1 WHERE id = 1",
+        [&title],
+    ).map_err(|e| format!("Failed to equip title: {}", e))?;
+
+    // Keep the user_titles table in sync for titles tracked there
+    conn.execute(
+        "UPDATE user_titles SET is_equipped = (title = ?1) WHERE user_id = 1",
+        [&title],
+    ).map_err(|e| format!("Failed to update title state: {}", e))?;
+
+    fetch_user_sync(&conn)
 }
 
-// Buff management functions
-fn clean_expired_buffs() {
-    // Stubbed
+#[tauri::command]
+async fn unequip_title(db: tauri::State<'_, DbConnection>) -> Result<User, String> {
+    let conn = db.lock().await;
+
+    conn.execute("UPDATE users SET equipped_title = NULL WHERE id = 1", [])
+        .map_err(|e| format!("Failed to unequip title: {}", e))?;
+    conn.execute("UPDATE user_titles SET is_equipped = FALSE WHERE user_id = 1", [])
+        .map_err(|e| format!("Failed to update title state: {}", e))?;
+
+    fetch_user_sync(&conn)
 }
 
+// Apply active XP/gold buff multipliers (from active_buffs) to task rewards.
+// Uses the strongest active multiplier of each type to prevent unbounded stacking.
 fn apply_buff_effects_to_rewards(base_xp: i64, base_gold: i64) -> (i64, i64) {
-    (base_xp, base_gold)
+    let (xp_mult, gold_mult) = match get_db_connection() {
+        Ok(conn) => conn.query_row(
+            "SELECT COALESCE(MAX(CASE WHEN buff_type = 'xp_boost' THEN effect_value END), 1.0),
+                    COALESCE(MAX(CASE WHEN buff_type = 'gold_boost' THEN effect_value END), 1.0)
+             FROM active_buffs WHERE user_id = 1 AND expires_at > datetime('now')",
+            [],
+            |row| Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?)),
+        ).unwrap_or((1.0, 1.0)),
+        Err(_) => (1.0, 1.0),
+    };
+
+    (
+        ((base_xp as f64) * xp_mult).round() as i64,
+        ((base_gold as f64) * gold_mult).round() as i64,
+    )
 }
 
 fn get_user_skill_stats_sync() -> Result<UserSkillStats, String> {
@@ -2040,17 +2297,94 @@ fn apply_stat_buffs_to_user_stats(user: &User) -> (i64, i64, i64, i64, i64) {
         endurance += skill_stats.will_bonus;
     }
 
+    // Apply active stat buffs persisted in the database
+    if let Ok(conn) = get_db_connection() {
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT affected_stat, effect_value FROM active_buffs
+             WHERE user_id = 1 AND buff_type = 'stat_boost' AND expires_at > datetime('now')"
+        ) {
+            if let Ok(rows) = stmt.query_map([], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, f64>(1)?))
+            }) {
+                for (stat, value) in rows.flatten() {
+                    match stat.as_deref() {
+                        Some("strength") => strength += value as i64,
+                        Some("intelligence") => intelligence += value as i64,
+                        Some("endurance") => endurance += value as i64,
+                        Some("charisma") => charisma += value as i64,
+                        Some("luck") => luck += value as i64,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     (strength, intelligence, endurance, charisma, luck)
 }
 
-#[tauri::command]
-async fn get_active_buffs() -> Result<Vec<Buff>, String> {
-    Ok(vec![])
+// Compute the original duration in minutes from stored start/expiry timestamps
+fn duration_minutes_between(start: &str, end: &str) -> i64 {
+    use chrono::NaiveDateTime;
+    let format = "%Y-%m-%d %H:%M:%S";
+    match (
+        NaiveDateTime::parse_from_str(start, format),
+        NaiveDateTime::parse_from_str(end, format),
+    ) {
+        (Ok(start), Ok(end)) => (end - start).num_minutes(),
+        _ => 0,
+    }
 }
 
 #[tauri::command]
-async fn apply_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Result<Buff, String> {
-    Err("Buff system not yet refactored".to_string())
+async fn get_active_buffs(db: tauri::State<'_, DbConnection>) -> Result<Vec<Buff>, String> {
+    let conn = db.lock().await;
+
+    // Lazily remove expired buffs
+    conn.execute("DELETE FROM active_buffs WHERE expires_at < datetime('now')", [])
+        .map_err(|e| format!("Failed to clean expired buffs: {}", e))?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name, buff_type, effect_value, affected_stat, started_at, expires_at
+         FROM active_buffs WHERE user_id = 1 AND expires_at > datetime('now')
+         ORDER BY expires_at"
+    ).map_err(|e| format!("Failed to prepare buffs query: {}", e))?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, f64>(3)?,
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, String>(5)?,
+            row.get::<_, String>(6)?,
+        ))
+    }).map_err(|e| format!("Failed to query buffs: {}", e))?;
+
+    let mut buffs = Vec::new();
+    for row in rows {
+        let (id, name, db_type, value, stat_type, started_at, expires_at) = row
+            .map_err(|e| format!("Failed to read buff row: {}", e))?;
+        buffs.push(Buff {
+            id: id.to_string(),
+            name,
+            buff_type: buff_type_from_db(&db_type),
+            value,
+            stat_type,
+            duration_minutes: duration_minutes_between(&started_at, &expires_at),
+            applied_at: sqlite_datetime_to_iso(&started_at),
+            expires_at: sqlite_datetime_to_iso(&expires_at),
+        });
+    }
+
+    Ok(buffs)
+}
+
+#[tauri::command]
+async fn apply_buff(db: tauri::State<'_, DbConnection>, buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Result<Buff, String> {
+    let conn = db.lock().await;
+    insert_buff(&conn, &buff_type, value, stat_type, duration_minutes, Some("manual"))
 }
 
 // Database connection helper
@@ -2397,8 +2731,76 @@ async fn get_recommended_difficulty(task_category: String) -> Result<i64, String
 }
 
 #[tauri::command]
-async fn purchase_item(item_id: String, price: i64) -> Result<User, String> {
-    Err("Shop system not yet refactored".to_string())
+async fn purchase_item(db: tauri::State<'_, DbConnection>, item_id: String, price: i64) -> Result<User, String> {
+    let conn = db.lock().await;
+
+    let tx = conn.unchecked_transaction()
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    let gold: i64 = tx.query_row(
+        "SELECT gold FROM users WHERE id = 1",
+        [],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to get user gold: {}", e))?;
+
+    if gold < price {
+        return Err(format!("Not enough gold! You need {} gold but only have {}.", price, gold));
+    }
+
+    let item = get_item_data(&item_id);
+
+    // Enforce stack limits (titles are unique, consumables cap at max_stack)
+    let existing_quantity: Option<i64> = tx.query_row(
+        "SELECT quantity FROM inventory_items WHERE user_id = 1 AND name = ?1",
+        [&item_id],
+        |row| row.get(0),
+    ).optional().map_err(|e| format!("Failed to check inventory: {}", e))?;
+
+    if let Some(quantity) = existing_quantity {
+        if quantity >= item.max_stack {
+            return Err(format!("You already have the maximum amount of {}.", item.name));
+        }
+    }
+
+    // Deduct gold
+    tx.execute("UPDATE users SET gold = gold - ?1 WHERE id = 1", [price])
+        .map_err(|e| format!("Failed to deduct gold: {}", e))?;
+
+    // Upsert the inventory row (the `name` column stores the catalog item id)
+    if existing_quantity.is_some() {
+        tx.execute(
+            "UPDATE inventory_items SET quantity = quantity + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = 1 AND name = ?1",
+            [&item_id],
+        ).map_err(|e| format!("Failed to update inventory: {}", e))?;
+    } else {
+        tx.execute(
+            "INSERT INTO inventory_items (user_id, name, description, item_type, rarity, quantity, price, effects, icon)
+             VALUES (1, ?1, ?2, ?3, ?4, 1, ?5, ?6, ?7)",
+            rusqlite::params![
+                item_id,
+                item.description,
+                item.item_type,
+                item.rarity,
+                price,
+                item.effect,
+                item.icon,
+            ],
+        ).map_err(|e| format!("Failed to add item to inventory: {}", e))?;
+    }
+
+    // Purchased title items are recorded as unlocked titles immediately
+    if item.item_type == "title" {
+        tx.execute(
+            "INSERT OR IGNORE INTO user_titles (user_id, title, description, rarity)
+             VALUES (1, ?1, ?2, ?3)",
+            rusqlite::params![item.name, item.description, item.rarity],
+        ).map_err(|e| format!("Failed to record title: {}", e))?;
+    }
+
+    tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    fetch_user_sync(&conn)
 }
 
 
