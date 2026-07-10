@@ -136,6 +136,10 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), String> {
         ("003_avatar_seed_data.sql", include_str!("../migrations/003_avatar_seed_data.sql")),
         ("004_inventory_and_buffs.sql", include_str!("../migrations/004_inventory_and_buffs.sql")),
         ("20241212000001_create_daily_stats.sql", include_str!("../migrations/20241212000001_create_daily_stats.sql")),
+        ("005_recurring_tasks.sql", include_str!("../migrations/005_recurring_tasks.sql")),
+        ("006_projects.sql", include_str!("../migrations/006_projects.sql")),
+        ("007_time_tracking.sql", include_str!("../migrations/007_time_tracking.sql")),
+        ("008_notifications.sql", include_str!("../migrations/008_notifications.sql")),
     ];
 
     for (filename, sql) in migrations {

@@ -1,14 +1,24 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type { 
-  GameState, 
-  User, 
-  Task, 
-  CreateTaskRequest, 
-  UserAchievement, 
+import type {
+  GameState,
+  User,
+  Task,
+  CreateTaskRequest,
+  UserAchievement,
   Achievement,
   Streak,
-  InventoryItem 
+  InventoryItem,
+  Project,
+  CreateProjectRequest,
+  TimeSession,
+  ActiveTimer,
+  TimeStats,
+  NotificationPreferences,
+  ScheduledNotification,
+  NotificationHistory,
+  CreateNotificationRequest,
+  UpdateNotificationPreferencesRequest
 } from '../types';
 import { logger, logUserAction, logPerformance } from '../utils/logger';
 import { withErrorHandling } from '../utils/errorHandler';
@@ -40,6 +50,23 @@ export const useGameStore = create<GameState>((set, get) => ({
   skills: {
     availablePoints: 0,
     unlockedSkills: [],
+    loading: false,
+  },
+  projects: {
+    all: [],
+    loading: false,
+  },
+  timer: {
+    active: null,
+    sessions: [],
+    stats: null,
+    loading: false,
+  },
+  notifications: {
+    preferences: null,
+    scheduled: [],
+    history: [],
+    pending: [],
     loading: false,
   },
   streak: null,
@@ -576,6 +603,33 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  // ==================== PROJECT MANAGEMENT ====================
+
+  fetchProjects: async (status?: string) => {
+    set(state => ({
+      projects: { ...state.projects, loading: true }
+    }));
+
+    try {
+      const projects: Project[] = await invoke('get_projects', { status });
+
+      set(() => ({
+        projects: {
+          all: projects,
+          loading: false
+        }
+      }));
+
+      logger.debug('Projects fetched successfully', { projectCount: projects.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      set(state => ({
+        projects: { ...state.projects, loading: false }
+      }));
+      throw error;
+    }
+  },
+
   unlockSkill: async (skillId: string): Promise<User> => {
     try {
       // For now, simulate skill unlock by spending skill points
@@ -606,6 +660,405 @@ export const useGameStore = create<GameState>((set, get) => ({
       return user;
     } catch (error) {
       console.error('Failed to unlock skill:', error);
+      throw error;
+    }
+  },
+
+  createProject: async (projectData: CreateProjectRequest): Promise<Project> => {
+    try {
+      const project: Project = await invoke('create_project', { projectData });
+
+      // Refresh projects list
+      await get().fetchProjects();
+
+      logger.info('Project created successfully', { projectName: project.name }, 'GameStore');
+      logUserAction('create_project', { projectId: project.id, name: project.name });
+
+      notificationService.notifySuccess(`Project "${project.name}" created!`);
+
+      return project;
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      notificationService.notifyError('Failed to create project');
+      throw error;
+    }
+  },
+
+  updateProject: async (projectId: number, projectData: CreateProjectRequest): Promise<Project> => {
+    try {
+      const project: Project = await invoke('update_project', { projectId, projectData });
+
+      // Refresh projects list
+      await get().fetchProjects();
+
+      logger.info('Project updated successfully', { projectId, name: project.name }, 'GameStore');
+      logUserAction('update_project', { projectId, name: project.name });
+
+      notificationService.notifySuccess(`Project "${project.name}" updated!`);
+
+      return project;
+    } catch (error) {
+      console.error('Failed to update project:', error);
+      notificationService.notifyError('Failed to update project');
+      throw error;
+    }
+  },
+
+  deleteProject: async (projectId: number) => {
+    try {
+      await invoke('delete_project', { projectId });
+
+      // Refresh projects list
+      await get().fetchProjects();
+      // Refresh tasks to show unassigned tasks
+      await get().fetchTasks();
+
+      logger.info('Project deleted successfully', { projectId }, 'GameStore');
+      logUserAction('delete_project', { projectId });
+
+      notificationService.notifySuccess('Project deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      notificationService.notifyError('Failed to delete project');
+      throw error;
+    }
+  },
+
+  assignTaskToProject: async (taskId: number, projectId: number | null) => {
+    try {
+      await invoke('assign_task_to_project', { taskId, projectId });
+
+      // Refresh both tasks and projects to update counts
+      await get().fetchTasks();
+      await get().fetchProjects();
+
+      logger.info('Task assigned to project', { taskId, projectId }, 'GameStore');
+      logUserAction('assign_task_to_project', { taskId, projectId });
+
+      notificationService.notifySuccess(
+        projectId ? 'Task assigned to project' : 'Task removed from project'
+      );
+    } catch (error) {
+      console.error('Failed to assign task to project:', error);
+      notificationService.notifyError('Failed to assign task');
+      throw error;
+    }
+  },
+
+  // ==================== TIMER ACTIONS ====================
+
+  startTimer: async (taskId: number, sessionType?: 'focus' | 'break' | 'pomodoro'): Promise<ActiveTimer> => {
+    set(state => ({ timer: { ...state.timer, loading: true } }));
+    try {
+      const timer: ActiveTimer = await invoke('start_timer', { taskId, sessionType });
+      set(state => ({
+        timer: {
+          ...state.timer,
+          active: timer,
+          loading: false
+        }
+      }));
+
+      logger.info('Timer started', { taskId, sessionType }, 'GameStore');
+      logUserAction('start_timer', { taskId, sessionType });
+      notificationService.notifySuccess(`Timer started for ${sessionType || 'focus'} session`);
+
+      return timer;
+    } catch (error) {
+      console.error('Failed to start timer:', error);
+      set(state => ({ timer: { ...state.timer, loading: false } }));
+      notificationService.notifyError(error instanceof Error ? error.message : 'Failed to start timer');
+      throw error;
+    }
+  },
+
+  pauseTimer: async (): Promise<ActiveTimer> => {
+    set(state => ({ timer: { ...state.timer, loading: true } }));
+    try {
+      const timer: ActiveTimer = await invoke('pause_timer');
+      set(state => ({
+        timer: {
+          ...state.timer,
+          active: timer,
+          loading: false
+        }
+      }));
+
+      logger.info('Timer paused', {}, 'GameStore');
+      logUserAction('pause_timer', {});
+      notificationService.notifySuccess('Timer paused');
+
+      return timer;
+    } catch (error) {
+      console.error('Failed to pause timer:', error);
+      set(state => ({ timer: { ...state.timer, loading: false } }));
+      notificationService.notifyError(error instanceof Error ? error.message : 'Failed to pause timer');
+      throw error;
+    }
+  },
+
+  stopTimer: async (notes?: string): Promise<TimeSession> => {
+    set(state => ({ timer: { ...state.timer, loading: true } }));
+    try {
+      const session: TimeSession = await invoke('stop_timer', { notes });
+      set(state => ({
+        timer: {
+          ...state.timer,
+          active: null,
+          sessions: [session, ...state.timer.sessions],
+          loading: false
+        }
+      }));
+
+      // Refresh tasks to update time spent
+      await get().fetchTasks();
+
+      const durationMinutes = session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0;
+      logger.info('Timer stopped', { sessionId: session.id, durationMinutes }, 'GameStore');
+      logUserAction('stop_timer', { sessionId: session.id, durationMinutes });
+      notificationService.notifySuccess(`Session completed! ${durationMinutes} minutes logged`);
+
+      return session;
+    } catch (error) {
+      console.error('Failed to stop timer:', error);
+      set(state => ({ timer: { ...state.timer, loading: false } }));
+      notificationService.notifyError(error instanceof Error ? error.message : 'Failed to stop timer');
+      throw error;
+    }
+  },
+
+  getActiveTimer: async (): Promise<ActiveTimer | null> => {
+    try {
+      const timer: ActiveTimer | null = await invoke('get_active_timer');
+      set(state => ({ timer: { ...state.timer, active: timer } }));
+      return timer;
+    } catch (error) {
+      console.error('Failed to get active timer:', error);
+      throw error;
+    }
+  },
+
+  fetchTimeSessions: async (taskId?: number, limit?: number) => {
+    set(state => ({ timer: { ...state.timer, loading: true } }));
+    try {
+      const sessions: TimeSession[] = await invoke('get_time_sessions', { taskId, limit });
+      set(state => ({
+        timer: {
+          ...state.timer,
+          sessions,
+          loading: false
+        }
+      }));
+      logger.debug('Time sessions fetched', { count: sessions.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch time sessions:', error);
+      set(state => ({ timer: { ...state.timer, loading: false } }));
+      throw error;
+    }
+  },
+
+  fetchTimeStats: async (taskId?: number) => {
+    set(state => ({ timer: { ...state.timer, loading: true } }));
+    try {
+      const stats: TimeStats = await invoke('get_time_stats', { taskId });
+      set(state => ({
+        timer: {
+          ...state.timer,
+          stats,
+          loading: false
+        }
+      }));
+      logger.debug('Time stats fetched', stats, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch time stats:', error);
+      set(state => ({ timer: { ...state.timer, loading: false } }));
+      throw error;
+    }
+  },
+
+  updateEstimatedTime: async (taskId: number, estimatedMinutes: number) => {
+    try {
+      await invoke('update_estimated_time', { taskId, estimatedMinutes });
+
+      // Refresh tasks to show updated estimate
+      await get().fetchTasks();
+
+      logger.info('Estimated time updated', { taskId, estimatedMinutes }, 'GameStore');
+      logUserAction('update_estimated_time', { taskId, estimatedMinutes });
+      notificationService.notifySuccess(`Estimated time set to ${estimatedMinutes} minutes`);
+    } catch (error) {
+      console.error('Failed to update estimated time:', error);
+      notificationService.notifyError('Failed to update estimated time');
+      throw error;
+    }
+  },
+
+  // ==================== NOTIFICATION ACTIONS ====================
+
+  fetchNotificationPreferences: async () => {
+    set(state => ({ notifications: { ...state.notifications, loading: true } }));
+    try {
+      const preferences: NotificationPreferences = await invoke('get_notification_preferences');
+      set(state => ({
+        notifications: {
+          ...state.notifications,
+          preferences,
+          loading: false
+        }
+      }));
+      logger.debug('Notification preferences fetched', {}, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch notification preferences:', error);
+      set(state => ({ notifications: { ...state.notifications, loading: false } }));
+      throw error;
+    }
+  },
+
+  updateNotificationPreferences: async (prefs: UpdateNotificationPreferencesRequest) => {
+    set(state => ({ notifications: { ...state.notifications, loading: true } }));
+    try {
+      const updatedPreferences: NotificationPreferences = await invoke('update_notification_preferences', { prefs });
+      set(state => ({
+        notifications: {
+          ...state.notifications,
+          preferences: updatedPreferences,
+          loading: false
+        }
+      }));
+
+      logger.info('Notification preferences updated', prefs, 'GameStore');
+      logUserAction('update_notification_preferences', prefs);
+      notificationService.notifySuccess('Notification preferences updated');
+    } catch (error) {
+      console.error('Failed to update notification preferences:', error);
+      set(state => ({ notifications: { ...state.notifications, loading: false } }));
+      notificationService.notifyError('Failed to update notification preferences');
+      throw error;
+    }
+  },
+
+  scheduleNotification: async (notification: CreateNotificationRequest): Promise<ScheduledNotification> => {
+    try {
+      const scheduledNotification: ScheduledNotification = await invoke('schedule_notification', {
+        notificationData: notification
+      });
+
+      // Refresh scheduled notifications
+      await get().fetchScheduledNotifications('pending');
+
+      logger.info('Notification scheduled', { type: notification.notification_type }, 'GameStore');
+      logUserAction('schedule_notification', { type: notification.notification_type });
+
+      return scheduledNotification;
+    } catch (error) {
+      console.error('Failed to schedule notification:', error);
+      notificationService.notifyError('Failed to schedule notification');
+      throw error;
+    }
+  },
+
+  cancelNotification: async (notificationId: number) => {
+    try {
+      await invoke('cancel_notification', { notificationId });
+
+      // Refresh scheduled notifications
+      await get().fetchScheduledNotifications();
+
+      logger.info('Notification cancelled', { notificationId }, 'GameStore');
+      logUserAction('cancel_notification', { notificationId });
+      notificationService.notifySuccess('Notification cancelled');
+    } catch (error) {
+      console.error('Failed to cancel notification:', error);
+      notificationService.notifyError('Failed to cancel notification');
+      throw error;
+    }
+  },
+
+  snoozeNotification: async (notificationId: number, snoozeMinutes: number) => {
+    try {
+      await invoke('snooze_notification', { notificationId, snoozeMinutes });
+
+      // Refresh scheduled notifications
+      await get().fetchScheduledNotifications();
+
+      logger.info('Notification snoozed', { notificationId, snoozeMinutes }, 'GameStore');
+      logUserAction('snooze_notification', { notificationId, snoozeMinutes });
+      notificationService.notifySuccess(`Notification snoozed for ${snoozeMinutes} minutes`);
+    } catch (error) {
+      console.error('Failed to snooze notification:', error);
+      notificationService.notifyError('Failed to snooze notification');
+      throw error;
+    }
+  },
+
+  markNotificationActioned: async (notificationId: number, action: 'dismissed' | 'snoozed' | 'completed' | 'opened') => {
+    try {
+      await invoke('mark_notification_actioned', { notificationId, action });
+
+      // Refresh notification history
+      await get().fetchNotificationHistory();
+
+      logger.info('Notification action marked', { notificationId, action }, 'GameStore');
+      logUserAction('mark_notification_actioned', { notificationId, action });
+    } catch (error) {
+      console.error('Failed to mark notification action:', error);
+      throw error;
+    }
+  },
+
+  fetchScheduledNotifications: async (status?: 'pending' | 'sent' | 'cancelled' | 'snoozed') => {
+    set(state => ({ notifications: { ...state.notifications, loading: true } }));
+    try {
+      const notifications: ScheduledNotification[] = await invoke('get_scheduled_notifications', { status });
+      set(state => ({
+        notifications: {
+          ...state.notifications,
+          scheduled: notifications,
+          loading: false
+        }
+      }));
+      logger.debug('Scheduled notifications fetched', { count: notifications.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch scheduled notifications:', error);
+      set(state => ({ notifications: { ...state.notifications, loading: false } }));
+      throw error;
+    }
+  },
+
+  fetchNotificationHistory: async (limit?: number) => {
+    set(state => ({ notifications: { ...state.notifications, loading: true } }));
+    try {
+      const history: NotificationHistory[] = await invoke('get_notification_history', { limit });
+      set(state => ({
+        notifications: {
+          ...state.notifications,
+          history,
+          loading: false
+        }
+      }));
+      logger.debug('Notification history fetched', { count: history.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch notification history:', error);
+      set(state => ({ notifications: { ...state.notifications, loading: false } }));
+      throw error;
+    }
+  },
+
+  fetchPendingNotifications: async () => {
+    set(state => ({ notifications: { ...state.notifications, loading: true } }));
+    try {
+      const pending: ScheduledNotification[] = await invoke('get_pending_notifications');
+      set(state => ({
+        notifications: {
+          ...state.notifications,
+          pending,
+          loading: false
+        }
+      }));
+      logger.debug('Pending notifications fetched', { count: pending.length }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to fetch pending notifications:', error);
+      set(state => ({ notifications: { ...state.notifications, loading: false } }));
       throw error;
     }
   },

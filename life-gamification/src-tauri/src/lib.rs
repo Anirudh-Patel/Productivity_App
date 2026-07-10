@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Mutex;
 use chrono::{DateTime, Utc, Duration};
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, OptionalExtension, Result};
 use tauri::Manager;
 use std::fs;
 use std::path::Path;
@@ -97,12 +97,48 @@ pub struct Task {
     pub priority: i64,
     pub created_at: String,
     pub completed_at: Option<String>,
-    pub task_type: String,  // "standard" or "goal"
+    pub task_type: String,  // "standard", "goal", or "recurring"
     pub goal_target: Option<i64>,
     pub goal_current: Option<i64>,
     pub goal_unit: Option<String>,
+    // Recurring task fields
+    pub recurrence_pattern: Option<String>,  // JSON string
+    pub parent_recurring_task_id: Option<i64>,
+    pub instance_date: Option<String>,
+    pub current_streak: Option<i64>,
+    pub longest_streak: Option<i64>,
+    pub last_completed_date: Option<String>,
+    pub streak_bonus_multiplier: Option<f64>,
+    pub project_id: Option<i64>,  // Project this task belongs to
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub id: i64,
+    pub user_id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub color: String,  // Hex color code
+    pub icon: String,   // Emoji icon
+    pub status: String, // "active", "completed", "archived"
+    pub due_date: Option<String>,
+    pub priority: i64,
+    pub total_tasks: i64,
+    pub completed_tasks: i64,
+    pub total_xp_earned: i64,
+    pub created_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateProjectRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub due_date: Option<String>,
+    pub priority: Option<i64>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
@@ -115,6 +151,8 @@ pub struct CreateTaskRequest {
     pub task_type: Option<String>,
     pub goal_target: Option<i64>,
     pub goal_unit: Option<String>,
+    pub recurrence_pattern: Option<String>,  // JSON string for recurring tasks
+    pub project_id: Option<i64>,  // Project to assign this task to
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +187,128 @@ pub struct Buff {
     pub duration_minutes: i64,
     pub applied_at: String, // ISO timestamp
     pub expires_at: String, // ISO timestamp
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeSession {
+    pub id: i64,
+    pub task_id: i64,
+    pub user_id: i64,
+    pub start_time: String,
+    pub end_time: Option<String>,
+    pub duration_seconds: Option<i64>,
+    pub session_type: String, // 'focus', 'break', 'manual', 'pomodoro'
+    pub is_completed: bool,
+    pub notes: Option<String>,
+    pub tags: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveTimer {
+    pub id: i64,
+    pub task_id: i64,
+    pub user_id: i64,
+    pub session_id: i64,
+    pub start_time: String,
+    pub is_paused: bool,
+    pub paused_at: Option<String>,
+    pub total_paused_seconds: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeStats {
+    pub total_seconds: i64,
+    pub total_sessions: i64,
+    pub focus_seconds: i64,
+    pub break_seconds: i64,
+    pub pomodoro_sessions: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationPreferences {
+    pub id: i64,
+    pub user_id: i64,
+    pub due_reminders_enabled: bool,
+    pub reminder_minutes_before: i64,
+    pub overdue_alerts_enabled: bool,
+    pub recurring_reminders_enabled: bool,
+    pub daily_agenda_enabled: bool,
+    pub daily_agenda_time: String,
+    pub weekly_planning_enabled: bool,
+    pub weekly_planning_time: String,
+    pub achievement_notifications_enabled: bool,
+    pub streak_notifications_enabled: bool,
+    pub timer_notifications_enabled: bool,
+    pub timer_reminder_minutes: i64,
+    pub quiet_hours_enabled: bool,
+    pub quiet_hours_start: Option<String>,
+    pub quiet_hours_end: Option<String>,
+    pub sound_enabled: bool,
+    pub priority_filter: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledNotification {
+    pub id: i64,
+    pub user_id: i64,
+    pub task_id: Option<i64>,
+    pub notification_type: String,
+    pub title: String,
+    pub message: String,
+    pub scheduled_for: String,
+    pub status: String,
+    pub snoozed_until: Option<String>,
+    pub snooze_count: i64,
+    pub priority: String,
+    pub action_url: Option<String>,
+    pub created_at: String,
+    pub sent_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationHistory {
+    pub id: i64,
+    pub user_id: i64,
+    pub task_id: Option<i64>,
+    pub scheduled_notification_id: Option<i64>,
+    pub notification_type: String,
+    pub title: String,
+    pub message: String,
+    pub sent_at: String,
+    pub action_taken: Option<String>,
+    pub action_taken_at: Option<String>,
+    pub priority: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateNotificationRequest {
+    pub task_id: Option<i64>,
+    pub notification_type: String,
+    pub title: String,
+    pub message: String,
+    pub scheduled_for: String,
+    pub priority: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateNotificationPreferencesRequest {
+    pub due_reminders_enabled: Option<bool>,
+    pub reminder_minutes_before: Option<i64>,
+    pub overdue_alerts_enabled: Option<bool>,
+    pub recurring_reminders_enabled: Option<bool>,
+    pub daily_agenda_enabled: Option<bool>,
+    pub daily_agenda_time: Option<String>,
+    pub weekly_planning_enabled: Option<bool>,
+    pub weekly_planning_time: Option<String>,
+    pub quiet_hours_enabled: Option<bool>,
+    pub quiet_hours_start: Option<String>,
+    pub quiet_hours_end: Option<String>,
+    pub sound_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,7 +406,10 @@ async fn get_tasks(db: tauri::State<'_, DbConnection>, status: Option<String>) -
             "SELECT t.id, t.user_id, t.title, t.description, t.category, t.difficulty,
              t.base_experience_reward, t.gold_reward, t.due_date, t.status, t.priority,
              COALESCE(t.task_type, 'standard') as task_type,
-             tp.target_progress as goal_target, tp.current_progress as goal_current
+             tp.target_progress as goal_target, tp.current_progress as goal_current,
+             t.recurrence_pattern, t.parent_recurring_task_id, t.instance_date,
+             t.current_streak, t.longest_streak, t.last_completed_date, t.streak_bonus_multiplier,
+             t.project_id
              FROM tasks t
              LEFT JOIN task_progress tp ON t.id = tp.task_id
              WHERE t.user_id = 1 AND t.status = '{}' AND t.status != 'archived'
@@ -255,7 +418,10 @@ async fn get_tasks(db: tauri::State<'_, DbConnection>, status: Option<String>) -
         None => "SELECT t.id, t.user_id, t.title, t.description, t.category, t.difficulty,
              t.base_experience_reward, t.gold_reward, t.due_date, t.status, t.priority,
              COALESCE(t.task_type, 'standard') as task_type,
-             tp.target_progress as goal_target, tp.current_progress as goal_current
+             tp.target_progress as goal_target, tp.current_progress as goal_current,
+             t.recurrence_pattern, t.parent_recurring_task_id, t.instance_date,
+             t.current_streak, t.longest_streak, t.last_completed_date, t.streak_bonus_multiplier,
+             t.project_id
              FROM tasks t
              LEFT JOIN task_progress tp ON t.id = tp.task_id
              WHERE t.user_id = 1 AND t.status != 'archived'
@@ -284,6 +450,14 @@ async fn get_tasks(db: tauri::State<'_, DbConnection>, status: Option<String>) -
             goal_target: row.get::<_, Option<i32>>(12).ok().flatten().map(|v| v as i64),
             goal_current: row.get::<_, Option<i32>>(13).ok().flatten().map(|v| v as i64),
             goal_unit: None, // Not in database yet
+            recurrence_pattern: row.get(14)?,
+            parent_recurring_task_id: row.get::<_, Option<i32>>(15).ok().flatten().map(|v| v as i64),
+            instance_date: row.get(16)?,
+            current_streak: row.get::<_, Option<i32>>(17).ok().flatten().map(|v| v as i64),
+            longest_streak: row.get::<_, Option<i32>>(18).ok().flatten().map(|v| v as i64),
+            last_completed_date: row.get(19)?,
+            streak_bonus_multiplier: row.get(20)?,
+            project_id: row.get::<_, Option<i32>>(21).ok().flatten().map(|v| v as i64),
         })
     })
     .map_err(|e| format!("Failed to query tasks: {}", e))?;
@@ -311,8 +485,8 @@ async fn create_task(db: tauri::State<'_, DbConnection>, task_data: CreateTaskRe
 
     tx.execute(
         "INSERT INTO tasks (user_id, title, description, category, difficulty,
-         base_experience_reward, gold_reward, due_date, status, priority, task_type)
-         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?9)",
+         base_experience_reward, gold_reward, due_date, status, priority, task_type, recurrence_pattern, project_id)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?9, ?10, ?11)",
         rusqlite::params![
             task_data.title,
             task_data.description,
@@ -323,6 +497,8 @@ async fn create_task(db: tauri::State<'_, DbConnection>, task_data: CreateTaskRe
             task_data.due_date,
             priority as i32,
             task_type,
+            task_data.recurrence_pattern,
+            task_data.project_id.map(|v| v as i32),
         ],
     )
     .map_err(|e| format!("Failed to insert task: {}", e))?;
@@ -361,6 +537,14 @@ async fn create_task(db: tauri::State<'_, DbConnection>, task_data: CreateTaskRe
         goal_target: task_data.goal_target,
         goal_current: if task_data.goal_target.is_some() { Some(0) } else { None },
         goal_unit: task_data.goal_unit,
+        recurrence_pattern: task_data.recurrence_pattern,
+        parent_recurring_task_id: None,
+        instance_date: None,
+        current_streak: Some(0),
+        longest_streak: Some(0),
+        last_completed_date: None,
+        streak_bonus_multiplier: Some(1.0),
+        project_id: task_data.project_id,
     })
 }
 
@@ -375,10 +559,12 @@ async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Resu
             .map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
         // Get task details and check if already completed
-        let (task_status, xp_reward, gold_reward): (String, i32, i32) = tx.query_row(
-            "SELECT status, base_experience_reward, gold_reward FROM tasks WHERE id = ?1 AND user_id = 1",
+        let (task_status, xp_reward, gold_reward, parent_recurring_id, current_streak, last_completed):
+            (String, i32, i32, Option<i32>, Option<i32>, Option<String>) = tx.query_row(
+            "SELECT status, base_experience_reward, gold_reward, parent_recurring_task_id,
+             current_streak, last_completed_date FROM tasks WHERE id = ?1 AND user_id = 1",
             [task_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
         )
         .map_err(|e| format!("Task not found: {}", e))?;
 
@@ -398,15 +584,70 @@ async fn complete_task(db: tauri::State<'_, DbConnection>, task_id: i64) -> Resu
             let int_bonus = intelligence as f64 * 0.02; // 2% XP bonus per INT point
             let luck_bonus = luck as f64 * 0.015; // 1.5% gold bonus per LUCK point
 
-            let final_xp = (xp_reward as f64 * (1.0 + int_bonus)) as i32;
+            // Calculate streak bonus for recurring tasks
+            let (new_streak, streak_multiplier) = if parent_recurring_id.is_some() {
+                use chrono::{NaiveDate, Utc};
+                let today = Utc::now().naive_utc().date();
+
+                let new_streak = if let Some(last_completed_str) = last_completed {
+                    // Parse last completed date
+                    if let Ok(last_date) = NaiveDate::parse_from_str(&last_completed_str, "%Y-%m-%d") {
+                        let days_since = (today - last_date).num_days();
+
+                        if days_since == 1 {
+                            // Consecutive day - increment streak
+                            current_streak.unwrap_or(0) + 1
+                        } else if days_since == 0 {
+                            // Same day - keep current streak
+                            current_streak.unwrap_or(0)
+                        } else {
+                            // Streak broken - start new streak at 1
+                            1
+                        }
+                    } else {
+                        1 // Can't parse date, start fresh
+                    }
+                } else {
+                    1 // First completion
+                };
+
+                // Calculate streak bonus multiplier
+                let multiplier = if new_streak >= 30 {
+                    3.0 // 3x XP at 30+ day streak
+                } else if new_streak >= 7 {
+                    2.0 // 2x XP at 7+ day streak
+                } else {
+                    1.0 // No bonus
+                };
+
+                (new_streak, multiplier)
+            } else {
+                (0, 1.0) // Not a recurring task
+            };
+
+            let final_xp = (xp_reward as f64 * (1.0 + int_bonus) * streak_multiplier) as i32;
             let final_gold = (gold_reward as f64 * (1.0 + luck_bonus)) as i32;
 
-            // Mark task as completed
-            tx.execute(
-                "UPDATE tasks SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?1",
-                [task_id],
-            )
-            .map_err(|e| format!("Failed to update task status: {}", e))?;
+            // Mark task as completed and update streak fields for recurring tasks
+            if parent_recurring_id.is_some() {
+                use chrono::Utc;
+                let today = Utc::now().format("%Y-%m-%d").to_string();
+                let longest = current_streak.unwrap_or(0).max(new_streak);
+
+                tx.execute(
+                    "UPDATE tasks SET status = 'completed', completed_at = CURRENT_TIMESTAMP,
+                     current_streak = ?2, longest_streak = ?3, last_completed_date = ?4,
+                     streak_bonus_multiplier = ?5 WHERE id = ?1",
+                    rusqlite::params![task_id, new_streak, longest, today, streak_multiplier],
+                )
+                .map_err(|e| format!("Failed to update task status: {}", e))?;
+            } else {
+                tx.execute(
+                    "UPDATE tasks SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?1",
+                    [task_id],
+                )
+                .map_err(|e| format!("Failed to update task status: {}", e))?;
+            }
 
             // Update user stats with rewards
             tx.execute(
@@ -509,6 +750,903 @@ async fn update_task_progress(db: tauri::State<'_, DbConnection>, task_id: i64, 
         .into_iter()
         .find(|t| t.id == task_id)
         .ok_or("Task not found".to_string())
+}
+
+#[tauri::command]
+async fn generate_recurring_instances(db: tauri::State<'_, DbConnection>) -> Result<Vec<Task>, String> {
+    use chrono::Utc;
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    let conn = db.lock().await;
+
+    // Get all recurring parent tasks (tasks with recurrence_pattern that are not instances themselves)
+    let mut stmt = conn.prepare(
+        "SELECT id, title, description, category, difficulty, base_experience_reward,
+         gold_reward, priority, recurrence_pattern, current_streak, longest_streak
+         FROM tasks
+         WHERE recurrence_pattern IS NOT NULL
+         AND parent_recurring_task_id IS NULL
+         AND status = 'active'"
+    )
+    .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let recurring_tasks = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,  // id
+            row.get::<_, String>(1)?,  // title
+            row.get::<_, Option<String>>(2)?,  // description
+            row.get::<_, String>(3)?,  // category
+            row.get::<_, i32>(4)?,  // difficulty
+            row.get::<_, i32>(5)?,  // base_xp
+            row.get::<_, i32>(6)?,  // gold
+            row.get::<_, i32>(7)?,  // priority
+            row.get::<_, String>(8)?,  // recurrence_pattern
+            row.get::<_, Option<i32>>(9)?,  // current_streak
+            row.get::<_, Option<i32>>(10)?,  // longest_streak
+        ))
+    })
+    .map_err(|e| format!("Failed to query recurring tasks: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Failed to collect recurring tasks: {}", e))?;
+
+    let mut created_instances = Vec::new();
+
+    for (parent_id, title, description, category, difficulty, base_xp, gold, priority,
+         recurrence_pattern, current_streak, longest_streak) in recurring_tasks {
+
+        // Check if instance already exists for today
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM recurring_task_instances
+                WHERE recurring_task_id = ?1 AND instance_date = ?2
+            )",
+            rusqlite::params![parent_id, &today],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+        if !exists {
+            // Create today's instance
+            let tx = conn.unchecked_transaction()
+                .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+            tx.execute(
+                "INSERT INTO tasks (user_id, title, description, category, difficulty,
+                 base_experience_reward, gold_reward, status, priority, task_type,
+                 parent_recurring_task_id, instance_date, current_streak, longest_streak,
+                 recurrence_pattern, streak_bonus_multiplier)
+                 VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, 'recurring',
+                 ?8, ?9, ?10, ?11, ?12, 1.0)",
+                rusqlite::params![
+                    title,
+                    description,
+                    category,
+                    difficulty,
+                    base_xp,
+                    gold,
+                    priority,
+                    parent_id,
+                    &today,
+                    current_streak,
+                    longest_streak,
+                    recurrence_pattern,
+                ],
+            )
+            .map_err(|e| format!("Failed to create instance: {}", e))?;
+
+            let instance_id = tx.last_insert_rowid();
+
+            // Track the instance creation
+            tx.execute(
+                "INSERT INTO recurring_task_instances (recurring_task_id, instance_task_id, instance_date)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![parent_id, instance_id, &today],
+            )
+            .map_err(|e| format!("Failed to track instance: {}", e))?;
+
+            tx.commit()
+                .map_err(|e| format!("Failed to commit: {}", e))?;
+
+            let title_for_log = title.clone();
+        created_instances.push(Task {
+                id: instance_id,
+                user_id: 1,
+                title,
+                description,
+                category,
+                difficulty: difficulty as i64,
+                base_experience_reward: base_xp as i64,
+                gold_reward: gold as i64,
+                due_date: None,
+                status: "active".to_string(),
+                priority: priority as i64,
+                created_at: today.clone(),
+                completed_at: None,
+                task_type: "recurring".to_string(),
+                goal_target: None,
+                goal_current: None,
+                goal_unit: None,
+                recurrence_pattern: Some(recurrence_pattern),
+                parent_recurring_task_id: Some(parent_id),
+                instance_date: Some(today.clone()),
+                current_streak: current_streak.map(|v| v as i64),
+                longest_streak: longest_streak.map(|v| v as i64),
+                last_completed_date: None,
+                streak_bonus_multiplier: Some(1.0),
+                project_id: None,
+            });
+
+            println!("Created recurring instance for task '{}' (ID: {})", title_for_log, instance_id);
+        }
+    }
+
+    Ok(created_instances)
+}
+
+// ==================== PROJECT MANAGEMENT COMMANDS ====================
+
+#[tauri::command]
+async fn get_projects(db: tauri::State<'_, DbConnection>, status: Option<String>) -> Result<Vec<Project>, String> {
+    let conn = db.lock().await;
+
+    let query = match status {
+        Some(ref s) => format!(
+            "SELECT id, user_id, name, description, color, icon, status, due_date, priority,
+             total_tasks, completed_tasks, total_xp_earned, created_at, completed_at
+             FROM projects
+             WHERE user_id = 1 AND status = '{}'
+             ORDER BY priority DESC, created_at DESC", s
+        ),
+        None => "SELECT id, user_id, name, description, color, icon, status, due_date, priority,
+             total_tasks, completed_tasks, total_xp_earned, created_at, completed_at
+             FROM projects
+             WHERE user_id = 1
+             ORDER BY priority DESC, created_at DESC".to_string(),
+    };
+
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare projects query: {}", e))?;
+
+    let project_iter = stmt.query_map([], |row| {
+        Ok(Project {
+            id: row.get::<_, i64>(0)?,
+            user_id: row.get::<_, i64>(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            color: row.get(4)?,
+            icon: row.get(5)?,
+            status: row.get(6)?,
+            due_date: row.get(7)?,
+            priority: row.get::<_, i32>(8).map(|v| v as i64)?,
+            total_tasks: row.get::<_, i32>(9).map(|v| v as i64)?,
+            completed_tasks: row.get::<_, i32>(10).map(|v| v as i64)?,
+            total_xp_earned: row.get::<_, i32>(11).map(|v| v as i64)?,
+            created_at: row.get(12)?,
+            completed_at: row.get(13)?,
+        })
+    })
+    .map_err(|e| format!("Failed to query projects: {}", e))?;
+
+    let projects: Result<Vec<Project>, _> = project_iter.collect();
+    projects.map_err(|e| format!("Failed to collect projects: {}", e))
+}
+
+#[tauri::command]
+async fn create_project(db: tauri::State<'_, DbConnection>, project_data: CreateProjectRequest) -> Result<Project, String> {
+    let color = project_data.color.unwrap_or_else(|| "#3B82F6".to_string());
+    let icon = project_data.icon.unwrap_or_else(|| "📁".to_string());
+    let priority = project_data.priority.unwrap_or(3);
+
+    let conn = db.lock().await;
+
+    conn.execute(
+        "INSERT INTO projects (user_id, name, description, color, icon, status, due_date, priority)
+         VALUES (1, ?1, ?2, ?3, ?4, 'active', ?5, ?6)",
+        rusqlite::params![
+            project_data.name,
+            project_data.description,
+            color,
+            icon,
+            project_data.due_date,
+            priority as i32,
+        ],
+    )
+    .map_err(|e| format!("Failed to create project: {}", e))?;
+
+    let project_id = conn.last_insert_rowid();
+
+    Ok(Project {
+        id: project_id,
+        user_id: 1,
+        name: project_data.name,
+        description: project_data.description,
+        color,
+        icon,
+        status: "active".to_string(),
+        due_date: project_data.due_date,
+        priority,
+        total_tasks: 0,
+        completed_tasks: 0,
+        total_xp_earned: 0,
+        created_at: Utc::now().to_rfc3339(),
+        completed_at: None,
+    })
+}
+
+#[tauri::command]
+async fn update_project(db: tauri::State<'_, DbConnection>, project_id: i64, project_data: CreateProjectRequest) -> Result<Project, String> {
+    let conn = db.lock().await;
+
+    conn.execute(
+        "UPDATE projects
+         SET name = ?1, description = ?2, color = COALESCE(?3, color), icon = COALESCE(?4, icon),
+             due_date = ?5, priority = COALESCE(?6, priority)
+         WHERE id = ?7",
+        rusqlite::params![
+            project_data.name,
+            project_data.description,
+            project_data.color,
+            project_data.icon,
+            project_data.due_date,
+            project_data.priority.map(|v| v as i32),
+            project_id,
+        ],
+    )
+    .map_err(|e| format!("Failed to update project: {}", e))?;
+
+    // Drop the lock before calling get_projects
+    drop(conn);
+
+    // Fetch and return the updated project
+    get_projects(db, None).await?
+        .into_iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| "Project not found after update".to_string())
+}
+
+#[tauri::command]
+async fn delete_project(db: tauri::State<'_, DbConnection>, project_id: i64) -> Result<String, String> {
+    let conn = db.lock().await;
+
+    // This will set project_id to NULL for all tasks due to ON DELETE SET NULL
+    conn.execute(
+        "DELETE FROM projects WHERE id = ?1",
+        rusqlite::params![project_id],
+    )
+    .map_err(|e| format!("Failed to delete project: {}", e))?;
+
+    Ok(format!("Project {} deleted successfully", project_id))
+}
+
+#[tauri::command]
+async fn assign_task_to_project(db: tauri::State<'_, DbConnection>, task_id: i64, project_id: Option<i64>) -> Result<String, String> {
+    let conn = db.lock().await;
+
+    conn.execute(
+        "UPDATE tasks SET project_id = ?1 WHERE id = ?2",
+        rusqlite::params![project_id.map(|v| v as i32), task_id],
+    )
+    .map_err(|e| format!("Failed to assign task to project: {}", e))?;
+
+    Ok("Task assigned successfully".to_string())
+}
+
+// ==================== TIME TRACKING COMMANDS ====================
+
+#[tauri::command]
+async fn start_timer(db: tauri::State<'_, DbConnection>, task_id: i64, session_type: Option<String>) -> Result<ActiveTimer, String> {
+    let conn = db.lock().await;
+    let session_type_str = session_type.unwrap_or_else(|| "focus".to_string());
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Check if there's already an active timer for this user
+    let existing: Option<i64> = conn.query_row(
+        "SELECT id FROM active_timers WHERE user_id = 1",
+        [],
+        |row| row.get(0)
+    ).ok();
+
+    if existing.is_some() {
+        return Err("Another timer is already running. Stop it first.".to_string());
+    }
+
+    // Create a new time session
+    conn.execute(
+        "INSERT INTO time_sessions (task_id, user_id, start_time, session_type) VALUES (?1, 1, ?2, ?3)",
+        rusqlite::params![task_id, now, session_type_str],
+    ).map_err(|e| format!("Failed to create time session: {}", e))?;
+
+    let session_id = conn.last_insert_rowid();
+
+    // Create active timer
+    conn.execute(
+        "INSERT INTO active_timers (task_id, user_id, session_id, start_time) VALUES (?1, 1, ?2, ?3)",
+        rusqlite::params![task_id, session_id, now],
+    ).map_err(|e| format!("Failed to create active timer: {}", e))?;
+
+    let timer_id = conn.last_insert_rowid();
+
+    // Return the created timer
+    let timer = conn.query_row(
+        "SELECT id, task_id, user_id, session_id, start_time, is_paused, paused_at, total_paused_seconds, created_at
+         FROM active_timers WHERE id = ?1",
+        [timer_id],
+        |row| Ok(ActiveTimer {
+            id: row.get::<_, i32>(0)? as i64,
+            task_id: row.get::<_, i32>(1)? as i64,
+            user_id: row.get::<_, i32>(2)? as i64,
+            session_id: row.get::<_, i32>(3)? as i64,
+            start_time: row.get(4)?,
+            is_paused: row.get(5)?,
+            paused_at: row.get(6)?,
+            total_paused_seconds: row.get::<_, i32>(7)? as i64,
+            created_at: row.get(8)?,
+        })
+    ).map_err(|e| format!("Failed to retrieve timer: {}", e))?;
+
+    Ok(timer)
+}
+
+#[tauri::command]
+async fn pause_timer(db: tauri::State<'_, DbConnection>) -> Result<ActiveTimer, String> {
+    let conn = db.lock().await;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Get active timer
+    let timer_id: i64 = conn.query_row(
+        "SELECT id FROM active_timers WHERE user_id = 1",
+        [],
+        |row| row.get::<_, i32>(0).map(|v| v as i64)
+    ).map_err(|_| "No active timer found".to_string())?;
+
+    // Update timer to paused state
+    conn.execute(
+        "UPDATE active_timers SET is_paused = 1, paused_at = ?1 WHERE id = ?2",
+        rusqlite::params![now, timer_id],
+    ).map_err(|e| format!("Failed to pause timer: {}", e))?;
+
+    // Return updated timer
+    let timer = conn.query_row(
+        "SELECT id, task_id, user_id, session_id, start_time, is_paused, paused_at, total_paused_seconds, created_at
+         FROM active_timers WHERE id = ?1",
+        [timer_id],
+        |row| Ok(ActiveTimer {
+            id: row.get::<_, i32>(0)? as i64,
+            task_id: row.get::<_, i32>(1)? as i64,
+            user_id: row.get::<_, i32>(2)? as i64,
+            session_id: row.get::<_, i32>(3)? as i64,
+            start_time: row.get(4)?,
+            is_paused: row.get(5)?,
+            paused_at: row.get(6)?,
+            total_paused_seconds: row.get::<_, i32>(7)? as i64,
+            created_at: row.get(8)?,
+        })
+    ).map_err(|e| format!("Failed to retrieve timer: {}", e))?;
+
+    Ok(timer)
+}
+
+#[tauri::command]
+async fn stop_timer(db: tauri::State<'_, DbConnection>, notes: Option<String>) -> Result<TimeSession, String> {
+    let conn = db.lock().await;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Get active timer
+    let (timer_id, session_id, task_id): (i64, i64, i64) = conn.query_row(
+        "SELECT id, session_id, task_id FROM active_timers WHERE user_id = 1",
+        [],
+        |row| Ok((
+            row.get::<_, i32>(0)? as i64,
+            row.get::<_, i32>(1)? as i64,
+            row.get::<_, i32>(2)? as i64,
+        ))
+    ).map_err(|_| "No active timer found".to_string())?;
+
+    // Update time session with end time and notes
+    conn.execute(
+        "UPDATE time_sessions SET end_time = ?1, notes = ?2 WHERE id = ?3",
+        rusqlite::params![now, notes, session_id],
+    ).map_err(|e| format!("Failed to update session: {}", e))?;
+
+    // Delete active timer
+    conn.execute(
+        "DELETE FROM active_timers WHERE id = ?1",
+        [timer_id],
+    ).map_err(|e| format!("Failed to delete timer: {}", e))?;
+
+    // Return the completed session
+    let session = conn.query_row(
+        "SELECT id, task_id, user_id, start_time, end_time, duration_seconds, session_type, is_completed, notes, tags, created_at
+         FROM time_sessions WHERE id = ?1",
+        [session_id],
+        |row| Ok(TimeSession {
+            id: row.get::<_, i32>(0)? as i64,
+            task_id: row.get::<_, i32>(1)? as i64,
+            user_id: row.get::<_, i32>(2)? as i64,
+            start_time: row.get(3)?,
+            end_time: row.get(4)?,
+            duration_seconds: row.get::<_, Option<i32>>(5)?.map(|v| v as i64),
+            session_type: row.get(6)?,
+            is_completed: row.get(7)?,
+            notes: row.get(8)?,
+            tags: row.get(9)?,
+            created_at: row.get(10)?,
+        })
+    ).map_err(|e| format!("Failed to retrieve session: {}", e))?;
+
+    Ok(session)
+}
+
+#[tauri::command]
+async fn get_active_timer(db: tauri::State<'_, DbConnection>) -> Result<Option<ActiveTimer>, String> {
+    let conn = db.lock().await;
+
+    let timer = conn.query_row(
+        "SELECT id, task_id, user_id, session_id, start_time, is_paused, paused_at, total_paused_seconds, created_at
+         FROM active_timers WHERE user_id = 1",
+        [],
+        |row| Ok(ActiveTimer {
+            id: row.get::<_, i32>(0)? as i64,
+            task_id: row.get::<_, i32>(1)? as i64,
+            user_id: row.get::<_, i32>(2)? as i64,
+            session_id: row.get::<_, i32>(3)? as i64,
+            start_time: row.get(4)?,
+            is_paused: row.get(5)?,
+            paused_at: row.get(6)?,
+            total_paused_seconds: row.get::<_, i32>(7)? as i64,
+            created_at: row.get(8)?,
+        })
+    ).optional()
+    .map_err(|e| format!("Failed to query timer: {}", e))?;
+
+    Ok(timer)
+}
+
+#[tauri::command]
+async fn get_time_sessions(db: tauri::State<'_, DbConnection>, task_id: Option<i64>, limit: Option<i64>) -> Result<Vec<TimeSession>, String> {
+    let conn = db.lock().await;
+    let limit_val = limit.unwrap_or(50);
+
+    let (query, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match task_id {
+        Some(tid) => (
+            "SELECT id, task_id, user_id, start_time, end_time, duration_seconds, session_type, is_completed, notes, tags, created_at
+             FROM time_sessions WHERE user_id = 1 AND task_id = ?1 AND end_time IS NOT NULL
+             ORDER BY start_time DESC LIMIT ?2".to_string(),
+            vec![Box::new(tid as i32), Box::new(limit_val as i32)]
+        ),
+        None => (
+            "SELECT id, task_id, user_id, start_time, end_time, duration_seconds, session_type, is_completed, notes, tags, created_at
+             FROM time_sessions WHERE user_id = 1 AND end_time IS NOT NULL
+             ORDER BY start_time DESC LIMIT ?1".to_string(),
+            vec![Box::new(limit_val as i32)]
+        ),
+    };
+
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let sessions_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+        Ok(TimeSession {
+            id: row.get::<_, i32>(0)? as i64,
+            task_id: row.get::<_, i32>(1)? as i64,
+            user_id: row.get::<_, i32>(2)? as i64,
+            start_time: row.get(3)?,
+            end_time: row.get(4)?,
+            duration_seconds: row.get::<_, Option<i32>>(5)?.map(|v| v as i64),
+            session_type: row.get(6)?,
+            is_completed: row.get(7)?,
+            notes: row.get(8)?,
+            tags: row.get(9)?,
+            created_at: row.get(10)?,
+        })
+    }).map_err(|e| format!("Failed to query sessions: {}", e))?;
+
+    let sessions: Result<Vec<TimeSession>, _> = sessions_iter.collect();
+    sessions.map_err(|e| format!("Failed to collect sessions: {}", e))
+}
+
+#[tauri::command]
+async fn get_time_stats(db: tauri::State<'_, DbConnection>, task_id: Option<i64>) -> Result<TimeStats, String> {
+    let conn = db.lock().await;
+
+    let (query, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match task_id {
+        Some(tid) => (
+            "SELECT
+                COALESCE(SUM(duration_seconds), 0) as total_seconds,
+                COUNT(*) as total_sessions,
+                COALESCE(SUM(CASE WHEN session_type = 'focus' THEN duration_seconds ELSE 0 END), 0) as focus_seconds,
+                COALESCE(SUM(CASE WHEN session_type = 'break' THEN duration_seconds ELSE 0 END), 0) as break_seconds,
+                COALESCE(SUM(CASE WHEN session_type = 'pomodoro' THEN 1 ELSE 0 END), 0) as pomodoro_sessions
+             FROM time_sessions WHERE user_id = 1 AND task_id = ?1 AND end_time IS NOT NULL".to_string(),
+            vec![Box::new(tid as i32)]
+        ),
+        None => (
+            "SELECT
+                COALESCE(SUM(duration_seconds), 0) as total_seconds,
+                COUNT(*) as total_sessions,
+                COALESCE(SUM(CASE WHEN session_type = 'focus' THEN duration_seconds ELSE 0 END), 0) as focus_seconds,
+                COALESCE(SUM(CASE WHEN session_type = 'break' THEN duration_seconds ELSE 0 END), 0) as break_seconds,
+                COALESCE(SUM(CASE WHEN session_type = 'pomodoro' THEN 1 ELSE 0 END), 0) as pomodoro_sessions
+             FROM time_sessions WHERE user_id = 1 AND end_time IS NOT NULL".to_string(),
+            vec![]
+        ),
+    };
+
+    let stats = conn.query_row(&query, rusqlite::params_from_iter(params.iter()), |row| {
+        Ok(TimeStats {
+            total_seconds: row.get::<_, i32>(0)? as i64,
+            total_sessions: row.get::<_, i32>(1)? as i64,
+            focus_seconds: row.get::<_, i32>(2)? as i64,
+            break_seconds: row.get::<_, i32>(3)? as i64,
+            pomodoro_sessions: row.get::<_, i32>(4)? as i64,
+        })
+    }).map_err(|e| format!("Failed to get stats: {}", e))?;
+
+    Ok(stats)
+}
+
+#[tauri::command]
+async fn update_estimated_time(db: tauri::State<'_, DbConnection>, task_id: i64, estimated_minutes: i64) -> Result<String, String> {
+    let conn = db.lock().await;
+
+    conn.execute(
+        "UPDATE tasks SET estimated_time_minutes = ?1 WHERE id = ?2",
+        rusqlite::params![estimated_minutes as i32, task_id],
+    ).map_err(|e| format!("Failed to update estimated time: {}", e))?;
+
+    Ok("Estimated time updated successfully".to_string())
+}
+
+// ==================== NOTIFICATION COMMANDS ====================
+
+#[tauri::command]
+async fn schedule_notification(
+    db: tauri::State<'_, DbConnection>,
+    notification_data: CreateNotificationRequest
+) -> Result<ScheduledNotification, String> {
+    let conn = db.lock().await;
+    let priority = notification_data.priority.unwrap_or_else(|| "medium".to_string());
+
+    conn.execute(
+        "INSERT INTO scheduled_notifications (user_id, task_id, notification_type, title, message, scheduled_for, priority, status)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, 'pending')",
+        rusqlite::params![
+            notification_data.task_id,
+            notification_data.notification_type,
+            notification_data.title,
+            notification_data.message,
+            notification_data.scheduled_for,
+            priority
+        ],
+    ).map_err(|e| format!("Failed to schedule notification: {}", e))?;
+
+    let notification_id = conn.last_insert_rowid();
+
+    let notification = conn.query_row(
+        "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
+                snoozed_until, snooze_count, priority, action_url, created_at, sent_at
+         FROM scheduled_notifications WHERE id = ?1",
+        [notification_id],
+        |row| Ok(ScheduledNotification {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            task_id: row.get::<_, Option<i32>>(2)?.map(|v| v as i64),
+            notification_type: row.get(3)?,
+            title: row.get(4)?,
+            message: row.get(5)?,
+            scheduled_for: row.get(6)?,
+            status: row.get(7)?,
+            snoozed_until: row.get(8)?,
+            snooze_count: row.get::<_, i32>(9)? as i64,
+            priority: row.get(10)?,
+            action_url: row.get(11)?,
+            created_at: row.get(12)?,
+            sent_at: row.get(13)?,
+        })
+    ).map_err(|e| format!("Failed to retrieve notification: {}", e))?;
+
+    Ok(notification)
+}
+
+#[tauri::command]
+async fn cancel_notification(db: tauri::State<'_, DbConnection>, notification_id: i64) -> Result<String, String> {
+    let conn = db.lock().await;
+
+    conn.execute(
+        "UPDATE scheduled_notifications SET status = 'cancelled' WHERE id = ?1 AND status = 'pending'",
+        [notification_id],
+    ).map_err(|e| format!("Failed to cancel notification: {}", e))?;
+
+    Ok("Notification cancelled successfully".to_string())
+}
+
+#[tauri::command]
+async fn get_scheduled_notifications(
+    db: tauri::State<'_, DbConnection>,
+    status: Option<String>
+) -> Result<Vec<ScheduledNotification>, String> {
+    let conn = db.lock().await;
+
+    let (query, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match status {
+        Some(s) => (
+            "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
+                    snoozed_until, snooze_count, priority, action_url, created_at, sent_at
+             FROM scheduled_notifications WHERE user_id = 1 AND status = ?1
+             ORDER BY scheduled_for ASC".to_string(),
+            vec![Box::new(s)]
+        ),
+        None => (
+            "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
+                    snoozed_until, snooze_count, priority, action_url, created_at, sent_at
+             FROM scheduled_notifications WHERE user_id = 1
+             ORDER BY scheduled_for ASC".to_string(),
+            vec![]
+        ),
+    };
+
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let notifications_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+        Ok(ScheduledNotification {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            task_id: row.get::<_, Option<i32>>(2)?.map(|v| v as i64),
+            notification_type: row.get(3)?,
+            title: row.get(4)?,
+            message: row.get(5)?,
+            scheduled_for: row.get(6)?,
+            status: row.get(7)?,
+            snoozed_until: row.get(8)?,
+            snooze_count: row.get::<_, i32>(9)? as i64,
+            priority: row.get(10)?,
+            action_url: row.get(11)?,
+            created_at: row.get(12)?,
+            sent_at: row.get(13)?,
+        })
+    }).map_err(|e| format!("Failed to query notifications: {}", e))?;
+
+    let notifications: Result<Vec<ScheduledNotification>, _> = notifications_iter.collect();
+    notifications.map_err(|e| format!("Failed to collect notifications: {}", e))
+}
+
+#[tauri::command]
+async fn snooze_notification(
+    db: tauri::State<'_, DbConnection>,
+    notification_id: i64,
+    snooze_minutes: i64
+) -> Result<ScheduledNotification, String> {
+    let conn = db.lock().await;
+    let snooze_until = chrono::Utc::now() + chrono::Duration::minutes(snooze_minutes);
+
+    conn.execute(
+        "UPDATE scheduled_notifications
+         SET status = 'snoozed', snoozed_until = ?1, snooze_count = snooze_count + 1
+         WHERE id = ?2",
+        rusqlite::params![snooze_until.to_rfc3339(), notification_id],
+    ).map_err(|e| format!("Failed to snooze notification: {}", e))?;
+
+    // Get updated notification
+    let notification = conn.query_row(
+        "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
+                snoozed_until, snooze_count, priority, action_url, created_at, sent_at
+         FROM scheduled_notifications WHERE id = ?1",
+        [notification_id],
+        |row| Ok(ScheduledNotification {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            task_id: row.get::<_, Option<i32>>(2)?.map(|v| v as i64),
+            notification_type: row.get(3)?,
+            title: row.get(4)?,
+            message: row.get(5)?,
+            scheduled_for: row.get(6)?,
+            status: row.get(7)?,
+            snoozed_until: row.get(8)?,
+            snooze_count: row.get::<_, i32>(9)? as i64,
+            priority: row.get(10)?,
+            action_url: row.get(11)?,
+            created_at: row.get(12)?,
+            sent_at: row.get(13)?,
+        })
+    ).map_err(|e| format!("Failed to retrieve notification: {}", e))?;
+
+    Ok(notification)
+}
+
+#[tauri::command]
+async fn get_notification_preferences(db: tauri::State<'_, DbConnection>) -> Result<NotificationPreferences, String> {
+    let conn = db.lock().await;
+
+    let prefs = conn.query_row(
+        "SELECT id, user_id, due_reminders_enabled, reminder_minutes_before, overdue_alerts_enabled,
+                recurring_reminders_enabled, daily_agenda_enabled, daily_agenda_time,
+                weekly_planning_enabled, weekly_planning_time, achievement_notifications_enabled,
+                streak_notifications_enabled, timer_notifications_enabled, timer_reminder_minutes,
+                quiet_hours_enabled, quiet_hours_start, quiet_hours_end, sound_enabled,
+                priority_filter, created_at, updated_at
+         FROM notification_preferences WHERE user_id = 1",
+        [],
+        |row| Ok(NotificationPreferences {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            due_reminders_enabled: row.get(2)?,
+            reminder_minutes_before: row.get::<_, i32>(3)? as i64,
+            overdue_alerts_enabled: row.get(4)?,
+            recurring_reminders_enabled: row.get(5)?,
+            daily_agenda_enabled: row.get(6)?,
+            daily_agenda_time: row.get(7)?,
+            weekly_planning_enabled: row.get(8)?,
+            weekly_planning_time: row.get(9)?,
+            achievement_notifications_enabled: row.get(10)?,
+            streak_notifications_enabled: row.get(11)?,
+            timer_notifications_enabled: row.get(12)?,
+            timer_reminder_minutes: row.get::<_, i32>(13)? as i64,
+            quiet_hours_enabled: row.get(14)?,
+            quiet_hours_start: row.get(15)?,
+            quiet_hours_end: row.get(16)?,
+            sound_enabled: row.get(17)?,
+            priority_filter: row.get(18)?,
+            created_at: row.get(19)?,
+            updated_at: row.get(20)?,
+        })
+    ).map_err(|e| format!("Failed to get notification preferences: {}", e))?;
+
+    Ok(prefs)
+}
+
+#[tauri::command]
+async fn update_notification_preferences(
+    db: tauri::State<'_, DbConnection>,
+    prefs: UpdateNotificationPreferencesRequest
+) -> Result<NotificationPreferences, String> {
+    // Scope block to ensure conn and params are dropped before the await
+    {
+        let conn = db.lock().await;
+
+        // Build dynamic UPDATE query based on provided fields
+        let mut updates = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(val) = prefs.due_reminders_enabled {
+            updates.push("due_reminders_enabled = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.reminder_minutes_before {
+            updates.push("reminder_minutes_before = ?");
+            params.push(Box::new(val as i32));
+        }
+        if let Some(val) = prefs.overdue_alerts_enabled {
+            updates.push("overdue_alerts_enabled = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.recurring_reminders_enabled {
+            updates.push("recurring_reminders_enabled = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.daily_agenda_enabled {
+            updates.push("daily_agenda_enabled = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.daily_agenda_time {
+            updates.push("daily_agenda_time = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.quiet_hours_enabled {
+            updates.push("quiet_hours_enabled = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.quiet_hours_start {
+            updates.push("quiet_hours_start = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.quiet_hours_end {
+            updates.push("quiet_hours_end = ?");
+            params.push(Box::new(val));
+        }
+        if let Some(val) = prefs.sound_enabled {
+            updates.push("sound_enabled = ?");
+            params.push(Box::new(val));
+        }
+
+        if !updates.is_empty() {
+            let query = format!(
+                "UPDATE notification_preferences SET {} WHERE user_id = 1",
+                updates.join(", ")
+            );
+
+            conn.execute(&query, rusqlite::params_from_iter(params.iter()))
+                .map_err(|e| format!("Failed to update preferences: {}", e))?;
+        }
+    }
+
+    // Return updated preferences
+    get_notification_preferences(db).await
+}
+
+#[tauri::command]
+async fn get_notification_history(
+    db: tauri::State<'_, DbConnection>,
+    limit: Option<i64>
+) -> Result<Vec<NotificationHistory>, String> {
+    let conn = db.lock().await;
+    let limit_val = limit.unwrap_or(50);
+
+    let mut stmt = conn.prepare(
+        "SELECT id, user_id, task_id, scheduled_notification_id, notification_type, title, message,
+                sent_at, action_taken, action_taken_at, priority, created_at
+         FROM notification_history WHERE user_id = 1
+         ORDER BY sent_at DESC LIMIT ?1"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let history_iter = stmt.query_map([limit_val as i32], |row| {
+        Ok(NotificationHistory {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            task_id: row.get::<_, Option<i32>>(2)?.map(|v| v as i64),
+            scheduled_notification_id: row.get::<_, Option<i32>>(3)?.map(|v| v as i64),
+            notification_type: row.get(4)?,
+            title: row.get(5)?,
+            message: row.get(6)?,
+            sent_at: row.get(7)?,
+            action_taken: row.get(8)?,
+            action_taken_at: row.get(9)?,
+            priority: row.get(10)?,
+            created_at: row.get(11)?,
+        })
+    }).map_err(|e| format!("Failed to query history: {}", e))?;
+
+    let history: Result<Vec<NotificationHistory>, _> = history_iter.collect();
+    history.map_err(|e| format!("Failed to collect history: {}", e))
+}
+
+#[tauri::command]
+async fn mark_notification_actioned(
+    db: tauri::State<'_, DbConnection>,
+    history_id: i64,
+    action: String
+) -> Result<String, String> {
+    let conn = db.lock().await;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE notification_history SET action_taken = ?1, action_taken_at = ?2 WHERE id = ?3",
+        rusqlite::params![action, now, history_id],
+    ).map_err(|e| format!("Failed to mark action: {}", e))?;
+
+    Ok("Action recorded successfully".to_string())
+}
+
+#[tauri::command]
+async fn get_pending_notifications(db: tauri::State<'_, DbConnection>) -> Result<Vec<ScheduledNotification>, String> {
+    let conn = db.lock().await;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
+                snoozed_until, snooze_count, priority, action_url, created_at, sent_at
+         FROM v_pending_notifications"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let notifications_iter = stmt.query_map([], |row| {
+        Ok(ScheduledNotification {
+            id: row.get::<_, i32>(0)? as i64,
+            user_id: row.get::<_, i32>(1)? as i64,
+            task_id: row.get::<_, Option<i32>>(2)?.map(|v| v as i64),
+            notification_type: row.get(3)?,
+            title: row.get(4)?,
+            message: row.get(5)?,
+            scheduled_for: row.get(6)?,
+            status: row.get(7)?,
+            snoozed_until: row.get(8)?,
+            snooze_count: row.get::<_, i32>(9)? as i64,
+            priority: row.get(10)?,
+            action_url: row.get(11)?,
+            created_at: row.get(12)?,
+            sent_at: row.get(13)?,
+        })
+    }).map_err(|e| format!("Failed to query pending notifications: {}", e))?;
+
+    let notifications: Result<Vec<ScheduledNotification>, _> = notifications_iter.collect();
+    notifications.map_err(|e| format!("Failed to collect notifications: {}", e))
 }
 
 #[tauri::command]
@@ -1684,6 +2822,7 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             get_user,
@@ -1691,6 +2830,28 @@ pub fn run() {
             create_task,
             complete_task,
             update_task_progress,
+            generate_recurring_instances,
+            get_projects,
+            create_project,
+            update_project,
+            delete_project,
+            assign_task_to_project,
+            start_timer,
+            pause_timer,
+            stop_timer,
+            get_active_timer,
+            get_time_sessions,
+            get_time_stats,
+            update_estimated_time,
+            schedule_notification,
+            cancel_notification,
+            get_scheduled_notifications,
+            snooze_notification,
+            get_notification_preferences,
+            update_notification_preferences,
+            get_notification_history,
+            mark_notification_actioned,
+            get_pending_notifications,
             get_user_achievements,
             check_achievements,
             purchase_item,

@@ -7,6 +7,8 @@ import { XPProgressChart, TaskCategoryChart, ActivityHeatmap } from '../../share
 import QuickStartWidget from '../../shared/components/ui/QuickStartWidget'
 import AchievementTracker from '../../shared/components/ui/AchievementTracker'
 import NotificationDemo from '../../shared/components/ui/NotificationDemo'
+import { TodaysHabits } from '../../shared/components/ui/TodaysHabits'
+import { UpcomingEventsWidget } from '../../shared/components/ui/UpcomingEventsWidget'
 
 const Dashboard = () => {
   // Performance monitoring
@@ -72,6 +74,15 @@ const Dashboard = () => {
         </div>
       </FadeIn>
 
+      {/* Today's Habits Widget */}
+      <FadeIn delay={200}>
+        <TodaysHabits />
+      </FadeIn>
+
+      {/* Upcoming Events Widget */}
+      <FadeIn delay={300}>
+        <UpcomingEventsWidget maxEvents={5} />
+      </FadeIn>
 
       {/* Dynamic Difficulty Insights */}
       <FadeIn delay={400}>

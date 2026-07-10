@@ -18,6 +18,7 @@ import { QuestChains } from '../../shared/components/ui/QuestChains';
 import AdvancedTaskManager from '../../shared/components/ui/AdvancedTaskManager';
 import TaskQuickActions from '../../shared/components/ui/TaskQuickActions';
 import { useGameEffects } from '../../shared/components/ui/VisualEffectsManager';
+import { InlineQuickAdd } from '../../shared/components/ui/InlineQuickAdd';
 
 const Tasks = () => {
   // Performance monitoring
@@ -235,6 +236,11 @@ const Tasks = () => {
               <Filter className="w-5 h-5" />
               <span>Filter</span>
             </button>
+          </div>
+
+          {/* Inline Quick Add */}
+          <div className="mb-6">
+            <InlineQuickAdd onTaskCreated={fetchTasks} />
           </div>
         </>
       )}
