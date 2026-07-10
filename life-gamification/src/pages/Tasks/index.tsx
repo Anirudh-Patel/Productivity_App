@@ -3,7 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
 import { DIFFICULTY_LEVELS } from '../../types';
-import type { Task } from '../../types';
+import type { Task, Project } from '../../types';
+import ProjectChipBar from '../../shared/components/ui/ProjectChipBar';
+import ProjectModal from '../../shared/components/ui/ProjectModal';
+import MoveToProjectMenu from '../../shared/components/ui/MoveToProjectMenu';
 import CreateTaskModal from '../../shared/components/ui/CreateTaskModal';
 import UpdateProgressModal from '../../shared/components/ui/UpdateProgressModal';
 import { SkeletonCard } from '../../shared/components/ui/Skeleton';
@@ -24,9 +27,14 @@ const Tasks = () => {
   // Performance monitoring
   useRenderPerformance('Tasks', process.env.NODE_ENV === 'development');
   
-  const { tasks, fetchTasks, completeTask, createTask, user } = useGameStore();
+  const { tasks, fetchTasks, completeTask, createTask, user, projects, fetchProjects } = useGameStore();
   const [searchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === 'true');
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [projectModal, setProjectModal] = useState<{ isOpen: boolean; project: Project | null }>({
+    isOpen: false,
+    project: null,
+  });
   const toast = useToast();
   const gameEffects = useGameEffects();
   const [progressModal, setProgressModal] = useState<{ isOpen: boolean; task: Task | null }>({ 
@@ -43,7 +51,8 @@ const Tasks = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
+    fetchProjects();
+  }, [fetchTasks, fetchProjects]);
 
   // Task-specific keyboard shortcuts
   useKeyboardShortcuts([
@@ -145,15 +154,20 @@ const Tasks = () => {
   const filteredTasks = (() => {
     let taskList = filter === 'completed' ? tasks.completed : tasks.active;
     
+    // Apply project filter if a project chip is selected
+    if (selectedProjectId !== null) {
+      taskList = taskList.filter(task => task.project_id === selectedProjectId);
+    }
+
     // Apply search filter if search term exists
     if (debouncedSearchTerm.trim()) {
-      taskList = taskList.filter(task => 
+      taskList = taskList.filter(task =>
         task.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         task.description?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         task.category.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       );
     }
-    
+
     return taskList;
   })();
 
@@ -238,6 +252,15 @@ const Tasks = () => {
             </button>
           </div>
 
+          {/* Project filter bar */}
+          <ProjectChipBar
+            projects={projects.all}
+            selectedProjectId={selectedProjectId}
+            onSelect={setSelectedProjectId}
+            onCreate={() => setProjectModal({ isOpen: true, project: null })}
+            onEdit={(project) => setProjectModal({ isOpen: true, project })}
+          />
+
           {/* Inline Quick Add */}
           <div className="mb-6">
             <InlineQuickAdd onTaskCreated={fetchTasks} />
@@ -321,12 +344,13 @@ const Tasks = () => {
         ) : (
           <StaggeredList delay={100}>
             {filteredTasks.map((task) => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
+              <TaskCard
+                key={task.id}
+                task={task}
+                project={projects.all.find(p => p.id === task.project_id) || null}
                 onComplete={() => handleCompleteTask(task.id)}
                 onUpdateProgress={() => setProgressModal({ isOpen: true, task })}
-                isLoading={loadingTaskId === task.id} 
+                isLoading={loadingTaskId === task.id}
               />
             ))}
           </StaggeredList>
@@ -337,9 +361,15 @@ const Tasks = () => {
       )}
 
       {/* Modals */}
-      <CreateTaskModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <CreateTaskModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+
+      <ProjectModal
+        isOpen={projectModal.isOpen}
+        project={projectModal.project}
+        onClose={() => setProjectModal({ isOpen: false, project: null })}
       />
       
       {progressModal.task && (
@@ -355,12 +385,13 @@ const Tasks = () => {
 
 interface TaskCardProps {
   task: Task;
+  project?: Project | null;
   onComplete: () => void;
   onUpdateProgress: () => void;
   isLoading?: boolean;
 }
 
-const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: TaskCardProps) => {
+const TaskCard = ({ task, project = null, onComplete, onUpdateProgress, isLoading = false }: TaskCardProps) => {
   // Performance monitoring for individual task cards
   useRenderPerformance(`TaskCard_${task.id}`, process.env.NODE_ENV === 'development');
   
@@ -433,6 +464,20 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
               {task.gold_reward} Gold
             </span>
             <span className="capitalize">{task.category}</span>
+            {project && (
+              <span
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded border"
+                style={{
+                  color: project.color,
+                  backgroundColor: `${project.color}1A`,
+                  borderColor: `${project.color}4D`,
+                }}
+                title={`Project: ${project.name}`}
+              >
+                <span>{project.icon}</span>
+                {project.name}
+              </span>
+            )}
             {task.task_type === 'goal' && (
               <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
                 Goal Quest
@@ -467,6 +512,7 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
                 {isLoading ? 'Completing...' : 'Complete'}
               </button>
             )}
+            <MoveToProjectMenu taskId={task.id} currentProjectId={task.project_id} />
           </div>
         )}
         
