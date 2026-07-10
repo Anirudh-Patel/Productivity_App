@@ -6,6 +6,8 @@ import type { CreateTaskRequest } from '../../../types';
 import { ButtonLoader } from './LoadingSpinner';
 import { createDefaultRecurrencePatterns, formatRecurrencePattern } from '../../../utils/recurringQuests';
 import { QuickCreateQuest } from './QuickCreateQuest';
+import { Activity } from 'lucide-react';
+import { useHealthStore } from '../../../store/healthStore';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -24,6 +26,16 @@ const REMINDER_OFFSET_MINUTES: Record<Exclude<ReminderOption, 'none'>, number> =
 // SQLite CURRENT_TIMESTAMP-compatible UTC format ("YYYY-MM-DD HH:MM:SS").
 const toSqliteUtc = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ');
 
+// Workout verification (Settings → Health): optional requirement for fitness/health quests.
+const VERIFY_WORKOUT_TYPES = [
+  { value: 'any', label: 'Any workout' },
+  { value: 'run', label: 'Run' },
+  { value: 'strength', label: 'Strength' },
+  { value: 'cycling', label: 'Cycling' },
+  { value: 'walk', label: 'Walk' },
+  { value: 'other', label: 'Other' },
+] as const;
+
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
   const { createTask, updateEstimatedTime, scheduleNotification, user, tasks, projects, fetchProjects } = useGameStore();
   const [loading, setLoading] = useState(false);
@@ -36,6 +48,9 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
     frequency: 'daily',
     interval: 1
   });
+  // Workout verification ('' = disabled) — only shown for fitness/health quests.
+  const [verifyWorkoutType, setVerifyWorkoutType] = useState<string>('');
+  const [verifyMinMinutes, setVerifyMinMinutes] = useState<string>('');
   const [formData, setFormData] = useState<CreateTaskRequest>({
     title: '',
     description: '',
@@ -104,6 +119,22 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         }
       }
 
+      // Attach the optional workout-verification requirement (auto-completes with
+      // bonus XP when a matching Apple Health workout is imported).
+      const isFitnessCategory = formData.category === 'fitness' || formData.category === 'health';
+      if (createdTask?.id && isFitnessCategory && verifyWorkoutType) {
+        try {
+          const parsedMinMinutes = parseInt(verifyMinMinutes, 10);
+          await useHealthStore.getState().setTaskVerification(
+            createdTask.id,
+            verifyWorkoutType,
+            !Number.isNaN(parsedMinMinutes) && parsedMinMinutes > 0 ? parsedMinMinutes : undefined
+          );
+        } catch (verifyError) {
+          console.error('Failed to set workout verification:', verifyError);
+        }
+      }
+
       // Reset form and close modal
       setFormData({
         title: '',
@@ -116,6 +147,8 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
       });
       setEstimatedMinutes('');
       setReminderOption('none');
+      setVerifyWorkoutType('');
+      setVerifyMinMinutes('');
       setTaskType('standard');
       setSelectedRecurrencePattern('daily');
       setModalTab('quick');
@@ -251,6 +284,53 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
                   <option value="social">Social</option>
                 </select>
               </div>
+
+              {/* Workout Verification (fitness/health quests only) */}
+              {(formData.category === 'fitness' || formData.category === 'health') && (
+                <div className="space-y-3 p-3 bg-solo-bg rounded-lg border border-gray-700">
+                  <div className="text-sm font-medium text-solo-accent flex items-center gap-2">
+                    <Activity className="w-4 h-4" />
+                    Verify with Workout (optional)
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label htmlFor="verify-workout-type" className="block text-xs text-gray-400 mb-1">
+                        Workout Type
+                      </label>
+                      <select
+                        id="verify-workout-type"
+                        value={verifyWorkoutType}
+                        onChange={(e) => setVerifyWorkoutType(e.target.value)}
+                        className="w-full px-3 py-2 bg-solo-primary border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                      >
+                        <option value="">No verification</option>
+                        {VERIFY_WORKOUT_TYPES.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label htmlFor="verify-min-minutes" className="block text-xs text-gray-400 mb-1">
+                        Min Minutes
+                      </label>
+                      <input
+                        id="verify-min-minutes"
+                        type="number"
+                        min="1"
+                        disabled={!verifyWorkoutType}
+                        value={verifyMinMinutes}
+                        onChange={(e) => setVerifyMinMinutes(e.target.value)}
+                        className="w-full px-3 py-2 bg-solo-primary border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent disabled:opacity-50"
+                        placeholder="e.g. 30"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Auto-completes with +50% bonus XP when a matching Apple Watch workout is
+                    imported (set up in Settings → Health).
+                  </div>
+                </div>
+              )}
 
               {/* Project */}
               {activeProjects.length > 0 && (

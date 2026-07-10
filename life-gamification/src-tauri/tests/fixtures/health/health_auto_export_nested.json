@@ -1,0 +1,33 @@
+{
+  "data": {
+    "workouts": [
+      {
+        "name": "Outdoor Run",
+        "start": "2026-07-09 07:01:00 -0700",
+        "end": "2026-07-09 07:31:00 -0700",
+        "duration": 30.02,
+        "activeEnergyBurned": { "qty": 250, "units": "kJ" },
+        "distance": { "qty": 5.2, "units": "km" }
+      },
+      {
+        "name": "Traditional Strength Training",
+        "start": "2026-07-09 18:00:12 -0700",
+        "end": "2026-07-09 18:45:12 -0700",
+        "duration": 45.0,
+        "activeEnergyBurned": { "qty": 320, "units": "kcal" }
+      },
+      {
+        "name": "Outdoor Walk",
+        "start": "2026-07-08 12:15:00 -0700",
+        "end": "2026-07-08 12:40:00 -0700",
+        "activeEnergyBurned": { "qty": 96.5, "units": "kcal" },
+        "distance": { "qty": 1.9, "units": "km" }
+      },
+      {
+        "name": "Corrupt Entry Without Start",
+        "duration": 20
+      },
+      "not-an-object"
+    ]
+  }
+}

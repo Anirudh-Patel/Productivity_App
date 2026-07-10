@@ -11,6 +11,7 @@ use std::path::Path;
 mod commands;
 use commands::avatar;
 use commands::github;
+use commands::health;
 
 mod database;
 use database::DbConnection;
@@ -3322,7 +3323,13 @@ pub fn run() {
             github::github_update_settings,
             github::github_get_task_links,
             github::github_close_issue,
-            github::github_sync
+            github::github_sync,
+            health::set_health_folder,
+            health::get_health_settings,
+            health::scan_health_folder,
+            health::get_workouts,
+            health::verify_fitness_tasks,
+            health::set_task_verification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
