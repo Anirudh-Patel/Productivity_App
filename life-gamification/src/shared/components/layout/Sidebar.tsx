@@ -10,7 +10,8 @@ import {
   Swords,
   Shield,
   Package,
-  Zap
+  Zap,
+  DollarSign
 } from 'lucide-react'
 import { useGameStore } from '../../../store/gameStore'
 import { SkeletonProgressBar, SkeletonText } from '../../components/ui/Skeleton'
@@ -37,6 +38,7 @@ const navItems = [
   { path: '/tasks', label: 'Quests', icon: CheckSquare },
   { path: '/calendar', label: 'Calendar', icon: Calendar },
   { path: '/stats', label: 'Stats', icon: BarChart3 },
+  { path: '/finance', label: 'Finance', icon: DollarSign },
   { path: '/skills', label: 'Skills', icon: Zap },
   { path: '/equipment', label: 'Equipment', icon: Shield },
   { path: '/inventory', label: 'Inventory', icon: Package },

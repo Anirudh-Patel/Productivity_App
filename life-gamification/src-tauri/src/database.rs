@@ -118,6 +118,7 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), String> {
         ("009_github_integration.sql", include_str!("../migrations/009_github_integration.sql")),
         ("010_calendar_links.sql", include_str!("../migrations/010_calendar_links.sql")),
         ("012_health.sql", include_str!("../migrations/012_health.sql")),
+        ("011_finance.sql", include_str!("../migrations/011_finance.sql")),
     ];
 
     for (filename, sql) in migrations {

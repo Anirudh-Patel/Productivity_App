@@ -9,6 +9,7 @@ import Inventory from './pages/Inventory'
 import Shop from './pages/Shop'
 import Settings from './pages/Settings'
 import Calendar from './pages/Calendar'
+import Finance from './pages/Finance'
 import { ErrorBoundary } from './shared/components/ui/ErrorBoundary'
 import { ToastProvider } from './shared/components/ui/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -45,6 +46,7 @@ function AppContent() {
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/stats" element={<Stats />} />
+          <Route path="/finance" element={<Finance />} />
           <Route path="/skills" element={<SkillTreePage />} />
           <Route path="/equipment" element={<Equipment />} />
           <Route path="/inventory" element={<Inventory />} />
