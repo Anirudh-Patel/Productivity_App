@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp } from 'lucide-react'
+import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp, Play, Square, Timer } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
 import { DIFFICULTY_LEVELS } from '../../types';
 import type { Task } from '../../types';
@@ -360,12 +360,46 @@ interface TaskCardProps {
   isLoading?: boolean;
 }
 
+// Format a task's tracked/estimated time as a compact "Xm / Ym est" line.
+const formatTaskTime = (task: Task): string => {
+  const spentMinutes = Math.round((task.total_time_spent_seconds || 0) / 60);
+  const estimate = task.estimated_time_minutes;
+  const spentLabel = `${spentMinutes}m`;
+  if (estimate) {
+    return `${spentLabel} / ${estimate}m est`;
+  }
+  return spentLabel;
+};
+
 const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: TaskCardProps) => {
   // Performance monitoring for individual task cards
   useRenderPerformance(`TaskCard_${task.id}`, process.env.NODE_ENV === 'development');
-  
+
+  const activeTimer = useGameStore((s) => s.timer.active);
+  const timerLoading = useGameStore((s) => s.timer.loading);
+  const startTimer = useGameStore((s) => s.startTimer);
+  const stopTimer = useGameStore((s) => s.stopTimer);
+
+  const isTimingThisTask = activeTimer?.task_id === task.id;
+
+  const handleTimerToggle = async () => {
+    try {
+      if (isTimingThisTask) {
+        await stopTimer();
+      } else {
+        // Guard: stop any other running timer before starting a new one.
+        if (activeTimer) {
+          await stopTimer();
+        }
+        await startTimer(task.id, 'focus');
+      }
+    } catch {
+      // Errors are surfaced via the store's notification service.
+    }
+  };
+
   const difficultyInfo = DIFFICULTY_LEVELS[task.difficulty as keyof typeof DIFFICULTY_LEVELS];
-  
+
   return (
     <div className="bg-theme-primary rounded-lg border border-gray-800 p-4 hover:border-gray-700 hover:shadow-lg hover:shadow-solo-accent/10 transition-all duration-300 hover:-translate-y-1">
       <div className="flex items-start justify-between">
@@ -433,6 +467,12 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
               {task.gold_reward} Gold
             </span>
             <span className="capitalize">{task.category}</span>
+            {(task.total_time_spent_seconds || task.estimated_time_minutes) && (
+              <span className="flex items-center gap-1 text-theme-accent" title="Time spent / estimated">
+                <Timer className="w-4 h-4" />
+                {formatTaskTime(task)}
+              </span>
+            )}
             {task.task_type === 'goal' && (
               <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
                 Goal Quest
@@ -449,6 +489,28 @@ const TaskCard = ({ task, onComplete, onUpdateProgress, isLoading = false }: Tas
         
         {task.status === 'active' && (
           <div className="ml-4 flex flex-col gap-2">
+            <button
+              onClick={handleTimerToggle}
+              disabled={timerLoading}
+              className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                isTimingThisTask
+                  ? 'bg-red-600/90 hover:bg-red-700 text-white'
+                  : 'bg-theme-bg border border-gray-700 hover:border-theme-accent/50 hover:text-theme-accent'
+              }`}
+              title={isTimingThisTask ? 'Stop timer' : 'Start focus timer'}
+            >
+              {isTimingThisTask ? (
+                <>
+                  <Square className="w-4 h-4" />
+                  Stop
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  Start
+                </>
+              )}
+            </button>
             {task.task_type === 'goal' ? (
               <button
                 onClick={onUpdateProgress}

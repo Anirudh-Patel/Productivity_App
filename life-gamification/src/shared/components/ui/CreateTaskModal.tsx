@@ -13,8 +13,9 @@ interface CreateTaskModalProps {
 }
 
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
-  const { createTask, user, tasks } = useGameStore();
+  const { createTask, updateEstimatedTime, user, tasks } = useGameStore();
   const [loading, setLoading] = useState(false);
+  const [estimatedMinutes, setEstimatedMinutes] = useState<string>('');
   const [modalTab, setModalTab] = useState<'manual' | 'quick'>('quick');
   const [taskType, setTaskType] = useState<'standard' | 'goal' | 'recurring'>('standard');
   const [selectedRecurrencePattern, setSelectedRecurrencePattern] = useState<string>('daily');
@@ -47,8 +48,18 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
           : undefined
       };
 
-      await createTask(taskData);
-      
+      const createdTask = await createTask(taskData);
+
+      // Persist the optional time estimate against the newly created task.
+      const parsedEstimate = parseInt(estimatedMinutes, 10);
+      if (createdTask?.id && !Number.isNaN(parsedEstimate) && parsedEstimate > 0) {
+        try {
+          await updateEstimatedTime(createdTask.id, parsedEstimate);
+        } catch (estimateError) {
+          console.error('Failed to set estimated time:', estimateError);
+        }
+      }
+
       // Reset form and close modal
       setFormData({
         title: '',
@@ -58,6 +69,7 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         priority: 3,
         task_type: 'standard',
       });
+      setEstimatedMinutes('');
       setTaskType('standard');
       setSelectedRecurrencePattern('daily');
       setModalTab('quick');
@@ -417,6 +429,26 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
                   <span>Low</span>
                   <span>Critical</span>
+                </div>
+              </div>
+
+              {/* Estimated Time */}
+              <div>
+                <label htmlFor="estimated-time" className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-solo-accent" />
+                  Estimated Time (minutes)
+                </label>
+                <input
+                  id="estimated-time"
+                  type="number"
+                  min="1"
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(e.target.value)}
+                  className="w-full px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                  placeholder="Optional, e.g. 30"
+                />
+                <div className="text-xs text-gray-400 mt-1">
+                  Track how long you expect this quest to take. Compare against actual time later.
                 </div>
               </div>
             </div>

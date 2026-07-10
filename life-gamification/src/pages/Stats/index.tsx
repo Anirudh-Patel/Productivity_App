@@ -10,6 +10,7 @@ import {
   DifficultyDistributionChart 
 } from '../../shared/components/ui/Charts';
 import { analyzeUserPerformance } from '../../utils/difficultyAdjustment';
+import TimeStatsPanel from '../../shared/components/ui/TimeStatsPanel';
 
 // Helper function to get tasks within time range
 const getTasksInTimeRange = (tasks: any[], timeRange: '7d' | '30d' | '90d' | 'all') => {
@@ -246,7 +247,11 @@ const Stats = () => {
         <FadeIn delay={500}>
           <DifficultyDistributionChart tasks={completedTasksInRange} />
         </FadeIn>
-        
+
+        <FadeIn delay={550}>
+          <TimeStatsPanel />
+        </FadeIn>
+
         <FadeIn delay={600}>
           <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
