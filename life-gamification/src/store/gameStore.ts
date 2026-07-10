@@ -991,17 +991,27 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  markNotificationActioned: async (notificationId: number, action: 'dismissed' | 'snoozed' | 'completed' | 'opened') => {
+  markNotificationActioned: async (historyId: number, action: 'dismissed' | 'snoozed' | 'completed' | 'opened') => {
     try {
-      await invoke('mark_notification_actioned', { notificationId, action });
+      await invoke('mark_notification_actioned', { historyId, action });
 
       // Refresh notification history
       await get().fetchNotificationHistory();
 
-      logger.info('Notification action marked', { notificationId, action }, 'GameStore');
-      logUserAction('mark_notification_actioned', { notificationId, action });
+      logger.info('Notification action marked', { historyId, action }, 'GameStore');
+      logUserAction('mark_notification_actioned', { historyId, action });
     } catch (error) {
       console.error('Failed to mark notification action:', error);
+      throw error;
+    }
+  },
+
+  markNotificationSent: async (notificationId: number) => {
+    try {
+      await invoke('mark_notification_sent', { notificationId });
+      logger.info('Notification marked as sent', { notificationId }, 'GameStore');
+    } catch (error) {
+      console.error('Failed to mark notification sent:', error);
       throw error;
     }
   },

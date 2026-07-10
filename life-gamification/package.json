@@ -34,6 +34,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.87.4",
     "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-sql": "^2.3.0",
     "@tensorflow/tfjs": "^4.22.0",
     "better-sqlite3": "^12.2.0",

@@ -8,6 +8,7 @@ import useNotificationStore, {
   createSystemNotification 
 } from '../store/notificationStore';
 import { SoloLevelUpAnimation, SystemNotification } from '../shared/components/ui/SoloLevelingAnimations';
+import { useNotificationDelivery } from '../hooks/useNotificationDelivery';
 
 interface NotificationProviderProps {
   children: ReactNode;
@@ -15,6 +16,9 @@ interface NotificationProviderProps {
 
 export const NotificationProvider = ({ children }: NotificationProviderProps) => {
   const notificationService = useNotificationService();
+  // Poll for due scheduled reminders and deliver them (OS notification with
+  // in-app fallback). See src/hooks/useNotificationDelivery.ts.
+  useNotificationDelivery();
   const { user } = useGameStore();
   const { addNotification, notifications } = useNotificationStore();
   const demoNotificationsAdded = useRef(false);

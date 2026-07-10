@@ -399,7 +399,8 @@ export interface GameState {
   scheduleNotification: (notification: CreateNotificationRequest) => Promise<ScheduledNotification>;
   cancelNotification: (notificationId: number) => Promise<void>;
   snoozeNotification: (notificationId: number, snoozeMinutes: number) => Promise<void>;
-  markNotificationActioned: (notificationId: number, action: 'dismissed' | 'snoozed' | 'completed' | 'opened') => Promise<void>;
+  markNotificationActioned: (historyId: number, action: 'dismissed' | 'snoozed' | 'completed' | 'opened') => Promise<void>;
+  markNotificationSent: (notificationId: number) => Promise<void>;
   fetchScheduledNotifications: (status?: 'pending' | 'sent' | 'cancelled' | 'snoozed') => Promise<void>;
   fetchNotificationHistory: (limit?: number) => Promise<void>;
   fetchPendingNotifications: () => Promise<void>;

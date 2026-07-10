@@ -16,6 +16,8 @@ import {
   ChevronDown
 } from 'lucide-react'
 import useNotificationStore, { Notification } from '../../../store/notificationStore'
+import { useGameStore } from '../../../store/gameStore'
+import UpcomingRemindersSection from './UpcomingRemindersSection'
 import { formatDistanceToNow } from 'date-fns'
 
 interface NotificationsDropdownProps {
@@ -40,6 +42,18 @@ const NotificationsDropdown = ({ className = '' }: NotificationsDropdownProps) =
   const [showFilters, setShowFilters] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Scheduled reminders (Sprint 8) contribute to the badge count.
+  const scheduled = useGameStore((state) => state.notifications.scheduled)
+  const fetchScheduledNotifications = useGameStore((state) => state.fetchScheduledNotifications)
+  const upcomingReminderCount = scheduled.filter(
+    (n) => n.status === 'pending' || n.status === 'snoozed'
+  ).length
+  const badgeCount = unreadCount + upcomingReminderCount
+
+  useEffect(() => {
+    fetchScheduledNotifications().catch(() => undefined)
+  }, [fetchScheduledNotifications])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -121,13 +135,13 @@ const NotificationsDropdown = ({ className = '' }: NotificationsDropdownProps) =
         className="relative p-2 hover:bg-theme-bg rounded-lg transition-colors"
       >
         <Bell className="w-5 h-5" />
-        {unreadCount > 0 && (
+        {badgeCount > 0 && (
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center"
           >
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {badgeCount > 99 ? '99+' : badgeCount}
           </motion.span>
         )}
       </button>
@@ -230,6 +244,9 @@ const NotificationsDropdown = ({ className = '' }: NotificationsDropdownProps) =
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Upcoming scheduled reminders (snooze / cancel) */}
+              <UpcomingRemindersSection />
 
               {/* Notifications List */}
               <div className="flex-1 overflow-y-auto">
