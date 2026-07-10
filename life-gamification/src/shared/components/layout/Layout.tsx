@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import Header from './Header'
 import { useGlobalShortcuts } from '../../../hooks/useKeyboardShortcuts'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
+import TimerWidget from '../ui/TimerWidget'
 
 interface LayoutProps {
   children: ReactNode
@@ -38,6 +39,8 @@ const Layout = ({ children }: LayoutProps) => {
         onClose={() => setShowShortcuts(false)}
         shortcuts={shortcuts}
       />
+
+      <TimerWidget />
     </>
   )
 }
