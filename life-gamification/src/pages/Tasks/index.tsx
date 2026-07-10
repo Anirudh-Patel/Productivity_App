@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp, Play, Square, Timer, Github } from 'lucide-react'
+import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp, Play, Square, Timer, Github, CalendarPlus } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
 import { useGithubStore } from '../../store/githubStore';
 import GithubSyncBar from '../../shared/components/ui/GithubSyncBar';
+import { useCalendarStore } from '../../store/calendarStore';
 import { DIFFICULTY_LEVELS } from '../../types';
 import type { Task, Project } from '../../types';
 import ProjectChipBar from '../../shared/components/ui/ProjectChipBar';
@@ -419,6 +420,23 @@ const TaskCard = ({ task, project = null, onComplete, onUpdateProgress, isLoadin
 
   const isTimingThisTask = activeTimer?.task_id === task.id;
 
+  // Two-way calendar sync: push this quest to Calendar.app ("Quests" calendar).
+  const addTaskToCalendar = useCalendarStore((s) => s.addTaskToCalendar);
+  const [calendarState, setCalendarState] = useState<'idle' | 'adding' | 'added' | 'error'>(
+    task.calendar_event_uid ? 'added' : 'idle'
+  );
+
+  const handleAddToCalendar = async () => {
+    if (calendarState === 'adding' || calendarState === 'added') return;
+    setCalendarState('adding');
+    try {
+      await addTaskToCalendar(task.id);
+      setCalendarState('added');
+    } catch {
+      setCalendarState('error');
+    }
+  };
+
   const handleTimerToggle = async () => {
     try {
       if (isTimingThisTask) {
@@ -590,6 +608,31 @@ const TaskCard = ({ task, project = null, onComplete, onUpdateProgress, isLoadin
               </button>
             )}
             <MoveToProjectMenu taskId={task.id} currentProjectId={task.project_id} />
+            {task.due_date && (
+              <button
+                onClick={handleAddToCalendar}
+                disabled={calendarState === 'adding' || calendarState === 'added'}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm ${
+                  calendarState === 'added'
+                    ? 'bg-theme-accent/10 border border-theme-accent/30 text-theme-accent cursor-default'
+                    : 'bg-theme-bg border border-gray-700 hover:border-theme-accent/50 hover:text-theme-accent disabled:opacity-50'
+                }`}
+                title={
+                  calendarState === 'added'
+                    ? 'Already on your "Quests" calendar in Calendar.app'
+                    : 'Add to Calendar.app ("Quests" calendar)'
+                }
+              >
+                <CalendarPlus className="w-4 h-4" />
+                {calendarState === 'adding'
+                  ? 'Adding...'
+                  : calendarState === 'added'
+                  ? 'On Calendar'
+                  : calendarState === 'error'
+                  ? 'Retry Calendar'
+                  : 'Add to Calendar'}
+              </button>
+            )}
           </div>
         )}
         

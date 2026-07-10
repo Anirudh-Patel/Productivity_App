@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Sword, Zap, Repeat, Calendar, Clock, Bell } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
+import { useCalendarStore } from '../../../store/calendarStore';
 import { DIFFICULTY_LEVELS, RecurrencePattern } from '../../../types';
 import type { CreateTaskRequest } from '../../../types';
 import { ButtonLoader } from './LoadingSpinner';
@@ -26,9 +27,11 @@ const toSqliteUtc = (date: Date) => date.toISOString().slice(0, 19).replace('T',
 
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
   const { createTask, updateEstimatedTime, scheduleNotification, user, tasks, projects, fetchProjects } = useGameStore();
+  const addTaskToCalendar = useCalendarStore((s) => s.addTaskToCalendar);
   const [loading, setLoading] = useState(false);
   const [estimatedMinutes, setEstimatedMinutes] = useState<string>('');
   const [reminderOption, setReminderOption] = useState<ReminderOption>('none');
+  const [putOnCalendar, setPutOnCalendar] = useState(false);
   const [modalTab, setModalTab] = useState<'manual' | 'quick'>('quick');
   const [taskType, setTaskType] = useState<'standard' | 'goal' | 'recurring'>('standard');
   const [selectedRecurrencePattern, setSelectedRecurrencePattern] = useState<string>('daily');
@@ -65,12 +68,21 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
       const taskData: CreateTaskRequest = {
         ...formData,
         task_type: taskType,
-        recurrence_pattern: taskType === 'recurring' 
+        recurrence_pattern: taskType === 'recurring'
           ? (selectedRecurrencePattern === 'custom' ? customRecurrence : defaultPatterns[selectedRecurrencePattern])
           : undefined
       };
 
       const createdTask = await createTask(taskData);
+
+      // Push the quest onto Calendar.app ("Quests" calendar) if requested.
+      if (createdTask?.id && formData.due_date && putOnCalendar) {
+        try {
+          await addTaskToCalendar(createdTask.id);
+        } catch (calendarError) {
+          console.error('Failed to put quest on calendar:', calendarError);
+        }
+      }
 
       // Persist the optional time estimate against the newly created task.
       const parsedEstimate = parseInt(estimatedMinutes, 10);
@@ -116,6 +128,7 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
       });
       setEstimatedMinutes('');
       setReminderOption('none');
+      setPutOnCalendar(false);
       setTaskType('standard');
       setSelectedRecurrencePattern('daily');
       setModalTab('quick');
@@ -504,6 +517,30 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
                   <span>Critical</span>
                 </div>
               </div>
+
+              {/* Put on Calendar toggle (only when a due date is set) */}
+              {formData.due_date && (
+                <div className="flex justify-between items-center p-3 bg-solo-bg rounded-lg border border-gray-700">
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-solo-accent" />
+                      Put on calendar
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Creates a 1h event in the "Quests" calendar in Calendar.app
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={putOnCalendar}
+                      onChange={(e) => setPutOnCalendar(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-solo-accent"></div>
+                  </label>
+                </div>
+              )}
 
               {/* Estimated Time */}
               <div>

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github, Calendar as CalendarIcon, RefreshCw, Link } from 'lucide-react';
 import GithubSettingsPanel from '../../shared/components/ui/GithubSettingsPanel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGameStore } from '../../store/gameStore';
+import { useCalendarStore } from '../../store/calendarStore';
 import { useRenderPerformance } from '../../utils/performance';
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents';
 import { AvatarSelector } from '../../shared/components/ui/AvatarSelector';
@@ -19,9 +20,61 @@ const Settings = () => {
   const [selectedAvatar, setSelectedAvatar] = useState('hunter-1');
   const [isDataExportModalOpen, setIsDataExportModalOpen] = useState(false);
 
+  // Calendar (macOS Calendar.app) two-way sync settings
+  const {
+    appleCalendarConnected,
+    appleCalendars,
+    importRules,
+    connectAppleCalendar,
+    fetchAppleCalendars,
+    fetchImportRules,
+    setImportRule,
+    runAutoImport,
+  } = useCalendarStore();
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [calendarStatus, setCalendarStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeSection !== 'calendar' || !appleCalendarConnected) return;
+    fetchAppleCalendars().catch(() => {});
+    fetchImportRules().catch(() => {});
+  }, [activeSection, appleCalendarConnected, fetchAppleCalendars, fetchImportRules]);
+
+  const handleCalendarConnect = async () => {
+    setCalendarBusy(true);
+    setCalendarStatus(null);
+    try {
+      await connectAppleCalendar();
+      await fetchImportRules().catch(() => {});
+      setCalendarStatus('Connected to Calendar.app');
+    } catch {
+      setCalendarStatus('Could not access Calendar.app — check System Settings > Privacy & Security > Automation.');
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
+
+  const handleImportNow = async () => {
+    setCalendarBusy(true);
+    setCalendarStatus(null);
+    try {
+      const imported = await runAutoImport();
+      setCalendarStatus(
+        imported > 0
+          ? `Imported ${imported} event${imported === 1 ? '' : 's'} as quests.`
+          : 'No new events to import (enable a calendar below first).'
+      );
+    } catch {
+      setCalendarStatus('Import failed — is Calendar.app accessible?');
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
+
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
     { id: 'data', label: 'Data Management', icon: Database },
     { id: 'github', label: 'GitHub', icon: Github },
     { id: 'preferences', label: 'Preferences', icon: Monitor },
@@ -201,6 +254,107 @@ const Settings = () => {
                     selectedAvatar={selectedAvatar}
                     onAvatarSelect={setSelectedAvatar}
                   />
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* Calendar Section */}
+          {activeSection === 'calendar' && (
+            <FadeIn delay={100}>
+              <div className="space-y-6">
+                {/* Connection */}
+                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <CalendarIcon className="w-5 h-5" />
+                    Apple Calendar (Calendar.app)
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Two-way sync with macOS Calendar.app. All calendars added there (iCloud, Google, ...)
+                    become available — no API keys needed. The first connection triggers a one-time macOS
+                    permission prompt.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleCalendarConnect}
+                      disabled={calendarBusy}
+                      className="px-4 py-2 bg-theme-accent/20 hover:bg-theme-accent/30 text-theme-accent border border-theme-accent/30 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Link className="w-4 h-4" />
+                      {appleCalendarConnected ? 'Reconnect' : 'Connect Calendar.app'}
+                    </button>
+                    {appleCalendarConnected && (
+                      <button
+                        onClick={handleImportNow}
+                        disabled={calendarBusy}
+                        className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${calendarBusy ? 'animate-spin' : ''}`} />
+                        Import Events Now
+                      </button>
+                    )}
+                    {appleCalendarConnected && (
+                      <span className="text-sm text-green-400">Connected</span>
+                    )}
+                  </div>
+                  {calendarStatus && (
+                    <p className="text-sm text-gray-400 mt-3">{calendarStatus}</p>
+                  )}
+                </div>
+
+                {/* Per-calendar import rules */}
+                {appleCalendarConnected && (
+                  <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                    <h3 className="text-lg font-semibold mb-2">Auto-Import Rules</h3>
+                    <p className="text-gray-400 text-sm mb-4">
+                      Import upcoming events (next 30 days) from a calendar as quests. Off by default —
+                      events are deduplicated, and your "Quests" calendar is never imported.
+                    </p>
+                    {appleCalendars.length === 0 ? (
+                      <p className="text-sm text-gray-400">No calendars found in Calendar.app.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {appleCalendars
+                          .filter((name) => name !== 'Quests')
+                          .map((name) => {
+                            const enabled = importRules.find((r) => r.calendar_name === name)?.enabled ?? false;
+                            return (
+                              <div key={name} className="flex justify-between items-center p-3 bg-theme-bg rounded-lg">
+                                <div>
+                                  <p className="font-medium">{name}</p>
+                                  <p className="text-sm text-gray-400">
+                                    {enabled ? 'Importing events as quests' : 'Not importing'}
+                                  </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={enabled}
+                                    onChange={(e) => {
+                                      setImportRule(name, e.target.checked).catch(() =>
+                                        setCalendarStatus('Failed to save import rule.')
+                                      );
+                                    }}
+                                  />
+                                  <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-accent"></div>
+                                </label>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Push info */}
+                <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold mb-2">Pushing Quests to Calendar</h3>
+                  <p className="text-gray-400 text-sm">
+                    Quests with a due date can be added to a dedicated "Quests" calendar via the
+                    "Add to Calendar" action on a quest card, or the "Put on calendar" toggle when
+                    creating one. Completing a linked quest marks its event with ✅.
+                  </p>
                 </div>
               </div>
             </FadeIn>
@@ -391,7 +545,7 @@ const Settings = () => {
           )}
 
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'data', 'github', 'preferences', 'notifications'].includes(activeSection) && (
+          {!['appearance', 'profile', 'calendar', 'data', 'github', 'preferences', 'notifications'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">

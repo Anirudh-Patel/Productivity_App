@@ -136,9 +136,9 @@ const CalendarPage: React.FC = () => {
         start: event.start,
         end: event.end,
         allDay: event.allDay,
-        backgroundColor: event.source === 'google' ? '#4285F420' : '#00000020',
-        borderColor: event.source === 'google' ? '#4285F4' : '#000000',
-        textColor: event.source === 'google' ? '#4285F4' : '#000000',
+        backgroundColor: event.source === 'google' ? '#4285F420' : '#A78BFA20',
+        borderColor: event.source === 'google' ? '#4285F4' : '#A78BFA',
+        textColor: event.source === 'google' ? '#4285F4' : '#A78BFA',
         extendedProps: {
           isFromGoogle: event.source === 'google',
           isFromApple: event.source === 'apple',

@@ -99,6 +99,9 @@ export interface Task {
   reminder_minutes_before?: number;
   custom_reminder_times?: string;
   last_reminder_sent_at?: string;
+  // Calendar two-way sync (macOS Calendar.app)
+  calendar_event_uid?: string; // Event this task was pushed to ("Quests" calendar)
+  source_event_uid?: string; // Event this task was imported from
 }
 
 export interface CreateTaskRequest {

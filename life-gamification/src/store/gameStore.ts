@@ -211,6 +211,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             console.warn('GitHub close-on-complete failed:', githubError);
           }
 
+          // Two-way calendar sync: if the task is linked to a Calendar.app event,
+          // prefix its title with ✅ (fire-and-forget, non-fatal on error).
+          invoke('mark_calendar_event_completed', { taskId }).catch(error => {
+            console.warn('Could not update linked calendar event:', error);
+          });
+
           set(state => ({
             tasks: {
               ...state.tasks,
