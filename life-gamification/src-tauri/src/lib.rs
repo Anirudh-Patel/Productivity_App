@@ -10,6 +10,7 @@ use std::path::Path;
 // Import avatar commands
 mod commands;
 use commands::avatar;
+use commands::finance;
 use commands::github;
 
 mod database;
@@ -3322,7 +3323,15 @@ pub fn run() {
             github::github_update_settings,
             github::github_get_task_links,
             github::github_close_issue,
-            github::github_sync
+            github::github_sync,
+            finance::finance_get_accounts,
+            finance::finance_create_account,
+            finance::finance_delete_account,
+            finance::import_transactions_csv,
+            finance::finance_get_transactions,
+            finance::finance_get_spending_summary,
+            finance::finance_get_monthly_totals,
+            finance::finance_set_category
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
