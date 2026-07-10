@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github, Calendar as CalendarIcon, RefreshCw, Link } from 'lucide-react';
 import GithubSettingsPanel from '../../shared/components/ui/GithubSettingsPanel';
-import { Activity } from 'lucide-react';
+import { Activity, ListChecks } from 'lucide-react';
 import HealthSettingsPanel from '../../shared/components/ui/HealthSettingsPanel';
 import { Inbox } from 'lucide-react';
 import CaptureSettingsPanel from '../../shared/components/ui/CaptureSettingsPanel';
+import RemindersSettingsPanel from '../../shared/components/ui/RemindersSettingsPanel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGameStore } from '../../store/gameStore';
 import { useCalendarStore } from '../../store/calendarStore';
@@ -83,6 +84,7 @@ const Settings = () => {
     { id: 'github', label: 'GitHub', icon: Github },
     { id: 'health', label: 'Health', icon: Activity },
     { id: 'capture', label: 'Quick Capture', icon: Inbox },
+    { id: 'reminders', label: 'Reminders', icon: ListChecks },
     { id: 'preferences', label: 'Preferences', icon: Monitor },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy', icon: Shield },
@@ -550,6 +552,13 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* Reminders Section */}
+          {activeSection === 'reminders' && (
+            <FadeIn delay={100}>
+              <RemindersSettingsPanel />
+            </FadeIn>
+          )}
+
           {/* Preferences Section */}
           {activeSection === 'preferences' && (
             <FadeIn delay={100}>
@@ -565,7 +574,7 @@ const Settings = () => {
           )}
 
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'calendar', 'data', 'github', 'health', 'capture', 'preferences', 'notifications'].includes(activeSection) && (
+          {!['appearance', 'profile', 'calendar', 'data', 'github', 'health', 'capture', 'reminders', 'preferences', 'notifications'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">

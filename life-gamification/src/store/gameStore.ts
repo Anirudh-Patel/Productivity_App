@@ -217,6 +217,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             console.warn('Could not update linked calendar event:', error);
           });
 
+          // Apple Reminders sync: if the task was imported from Reminders.app,
+          // check its reminder off (fire-and-forget, non-fatal on error).
+          invoke('mark_reminder_completed', { taskId }).catch(error => {
+            console.warn('Could not complete linked reminder:', error);
+          });
+
           set(state => ({
             tasks: {
               ...state.tasks,

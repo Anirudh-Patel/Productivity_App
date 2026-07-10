@@ -6,6 +6,7 @@ import { useGlobalShortcuts } from '../../../hooks/useKeyboardShortcuts'
 import { useGithubSync } from '../../../hooks/useGithubSync'
 import { useHealthSync } from '../../../hooks/useHealthSync'
 import { useCaptureSync } from '../../../hooks/useCaptureSync'
+import { useRemindersSync } from '../../../hooks/useRemindersSync'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
 import TimerWidget from '../ui/TimerWidget'
 
@@ -26,6 +27,8 @@ const Layout = ({ children }: LayoutProps) => {
 
   // Quick-capture inbox scan -> quests (on start + every 5 min)
   useCaptureSync();
+  // Apple Reminders -> quests sync (on start + every 15 min)
+  useRemindersSync();
 
   // Global keyboard shortcuts
   const shortcuts = useGlobalShortcuts({

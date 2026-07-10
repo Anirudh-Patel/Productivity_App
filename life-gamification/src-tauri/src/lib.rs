@@ -15,6 +15,7 @@ use commands::capture;
 use commands::finance;
 use commands::github;
 use commands::health;
+use commands::reminders;
 
 mod database;
 use database::DbConnection;
@@ -3291,7 +3292,13 @@ pub fn run() {
             capture::get_capture_settings,
             capture::set_capture_folder,
             capture::scan_capture_inbox,
-            capture::get_capture_log
+            capture::get_capture_log,
+            reminders::connect_apple_reminders,
+            reminders::get_reminder_lists,
+            reminders::set_reminder_list_rule,
+            reminders::get_reminders_settings,
+            reminders::mark_reminder_completed,
+            reminders::sync_reminders
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
