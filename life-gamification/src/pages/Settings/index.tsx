@@ -3,6 +3,8 @@ import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Databas
 import GithubSettingsPanel from '../../shared/components/ui/GithubSettingsPanel';
 import { Activity } from 'lucide-react';
 import HealthSettingsPanel from '../../shared/components/ui/HealthSettingsPanel';
+import { Inbox } from 'lucide-react';
+import CaptureSettingsPanel from '../../shared/components/ui/CaptureSettingsPanel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGameStore } from '../../store/gameStore';
 import { useCalendarStore } from '../../store/calendarStore';
@@ -80,6 +82,7 @@ const Settings = () => {
     { id: 'data', label: 'Data Management', icon: Database },
     { id: 'github', label: 'GitHub', icon: Github },
     { id: 'health', label: 'Health', icon: Activity },
+    { id: 'capture', label: 'Quick Capture', icon: Inbox },
     { id: 'preferences', label: 'Preferences', icon: Monitor },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy', icon: Shield },
@@ -540,6 +543,13 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* Quick Capture Section */}
+          {activeSection === 'capture' && (
+            <FadeIn delay={100}>
+              <CaptureSettingsPanel />
+            </FadeIn>
+          )}
+
           {/* Preferences Section */}
           {activeSection === 'preferences' && (
             <FadeIn delay={100}>
@@ -555,7 +565,7 @@ const Settings = () => {
           )}
 
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'calendar', 'data', 'github', 'health', 'preferences', 'notifications'].includes(activeSection) && (
+          {!['appearance', 'profile', 'calendar', 'data', 'github', 'health', 'capture', 'preferences', 'notifications'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">

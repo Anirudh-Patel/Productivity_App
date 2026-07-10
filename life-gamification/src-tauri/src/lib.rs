@@ -11,6 +11,7 @@ use std::path::Path;
 mod commands;
 use commands::avatar;
 use commands::calendar;
+use commands::capture;
 use commands::finance;
 use commands::github;
 use commands::health;
@@ -3286,7 +3287,11 @@ pub fn run() {
             finance::finance_get_transactions,
             finance::finance_get_spending_summary,
             finance::finance_get_monthly_totals,
-            finance::finance_set_category
+            finance::finance_set_category,
+            capture::get_capture_settings,
+            capture::set_capture_folder,
+            capture::scan_capture_inbox,
+            capture::get_capture_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

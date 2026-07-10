@@ -5,6 +5,7 @@ import Header from './Header'
 import { useGlobalShortcuts } from '../../../hooks/useKeyboardShortcuts'
 import { useGithubSync } from '../../../hooks/useGithubSync'
 import { useHealthSync } from '../../../hooks/useHealthSync'
+import { useCaptureSync } from '../../../hooks/useCaptureSync'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
 import TimerWidget from '../ui/TimerWidget'
 
@@ -22,6 +23,9 @@ const Layout = ({ children }: LayoutProps) => {
 
   // Apple Health workout scan -> fitness quest verification (on start + every 15 min)
   useHealthSync();
+
+  // Quick-capture inbox scan -> quests (on start + every 5 min)
+  useCaptureSync();
 
   // Global keyboard shortcuts
   const shortcuts = useGlobalShortcuts({
