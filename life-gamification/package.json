@@ -36,6 +36,7 @@
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-sql": "^2.3.0",
     "@tensorflow/tfjs": "^4.22.0",
+    "better-sqlite3": "^12.2.0",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.12",

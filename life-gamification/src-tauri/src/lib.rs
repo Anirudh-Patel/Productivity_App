@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::Mutex;
 use chrono::{DateTime, Utc, Duration};
-use rusqlite::Connection;
+use rusqlite::{Connection, Result};
 use tauri::Manager;
 use std::fs;
 use std::path::Path;
@@ -13,6 +14,54 @@ use commands::avatar;
 mod database;
 use database::DbConnection;
 
+
+// Skill Tree Structs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillNode {
+    pub node_key: String,
+    pub name: String,
+    pub description: String,
+    pub node_type: String,
+    pub primary_stat: String,
+    pub skill_point_cost: i64,
+    pub level_requirement: i64,
+    pub x_position: f64,
+    pub y_position: f64,
+    pub prerequisite_nodes: Vec<String>,
+    pub stats: SkillNodeStats,
+    pub color_hex: String,
+    pub size: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillNodeStats {
+    pub strength: i64,
+    pub intelligence: i64,
+    pub luck: i64,
+    pub aura: i64,
+    pub will: i64,
+    pub health: i64,
+    pub mana: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillTreeConnection {
+    pub from_node: String,
+    pub to_node: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSkillStats {
+    pub available_skill_points: i64,
+    pub strength_bonus: i64,
+    pub intelligence_bonus: i64,
+    pub luck_bonus: i64,
+    pub aura_bonus: i64,
+    pub will_bonus: i64,
+    pub health_bonus: i64,
+    pub mana_bonus: i64,
+    pub total_nodes_allocated: i64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -792,8 +841,68 @@ fn apply_buff_effects_to_rewards(base_xp: i64, base_gold: i64) -> (i64, i64) {
     (base_xp, base_gold)
 }
 
+fn get_user_skill_stats_sync() -> Result<UserSkillStats, String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT available_skill_points, strength_bonus, intelligence_bonus, luck_bonus,
+                aura_bonus, will_bonus, health_bonus, mana_bonus, total_nodes_allocated
+         FROM user_skill_stats WHERE user_id = 1"
+    ).map_err(|e| e.to_string())?;
+    
+    let result = stmt.query_row([], |row| {
+        Ok(UserSkillStats {
+            available_skill_points: row.get(0)?,
+            strength_bonus: row.get(1)?,
+            intelligence_bonus: row.get(2)?,
+            luck_bonus: row.get(3)?,
+            aura_bonus: row.get(4)?,
+            will_bonus: row.get(5)?,
+            health_bonus: row.get(6)?,
+            mana_bonus: row.get(7)?,
+            total_nodes_allocated: row.get(8)?,
+        })
+    });
+    
+    match result {
+        Ok(stats) => Ok(stats),
+        Err(_) => {
+            // Return default stats if none exist
+            Ok(UserSkillStats {
+                available_skill_points: 10,
+                strength_bonus: 0,
+                intelligence_bonus: 0,
+                luck_bonus: 0,
+                aura_bonus: 0,
+                will_bonus: 0,
+                health_bonus: 0,
+                mana_bonus: 0,
+                total_nodes_allocated: 0,
+            })
+        }
+    }
+}
+
 fn apply_stat_buffs_to_user_stats(user: &User) -> (i64, i64, i64, i64, i64) {
-    (user.strength, user.intelligence, user.endurance, user.charisma, user.luck)
+    // Start with base user stats
+    let mut strength = user.strength;
+    let mut intelligence = user.intelligence;
+    let mut endurance = user.endurance;
+    let mut charisma = user.charisma;
+    let mut luck = user.luck;
+
+    // Apply skill tree stat bonuses
+    if let Ok(skill_stats) = get_user_skill_stats_sync() {
+        strength += skill_stats.strength_bonus;
+        intelligence += skill_stats.intelligence_bonus;
+        luck += skill_stats.luck_bonus;
+        // Skill tree has aura and will instead of endurance and charisma;
+        // map aura to charisma and will to endurance for compatibility
+        charisma += skill_stats.aura_bonus;
+        endurance += skill_stats.will_bonus;
+    }
+
+    (strength, intelligence, endurance, charisma, luck)
 }
 
 #[tauri::command]
@@ -804,6 +913,343 @@ async fn get_active_buffs() -> Result<Vec<Buff>, String> {
 #[tauri::command]
 async fn apply_buff(buff_type: String, value: f64, stat_type: Option<String>, duration_minutes: i64) -> Result<Buff, String> {
     Err("Buff system not yet refactored".to_string())
+}
+
+// Database connection helper
+fn get_db_connection() -> Result<Connection> {
+    // During development, use the database in src-tauri directory
+    let db_path = if cfg!(debug_assertions) {
+        // Development mode - use src-tauri/game.db
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("game.db")
+    } else {
+        // Production mode - use relative path
+        std::path::PathBuf::from("game.db")
+    };
+    
+    Connection::open(&db_path)
+}
+
+// Skill Tree Command Functions
+#[tauri::command]
+async fn get_skill_nodes() -> Result<Vec<SkillNode>, String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT node_key, name, description, node_type, primary_stat, skill_point_cost, 
+                level_requirement, x_position, y_position, prerequisite_nodes,
+                stat_bonuses, color_hex, size
+         FROM skill_nodes"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([], |row| {
+        let prerequisite_string: String = row.get(9).unwrap_or_default();
+        let prerequisites: Vec<String> = if prerequisite_string.is_empty() || prerequisite_string == "[]" {
+            Vec::new()
+        } else {
+            // Parse JSON array or comma-separated list
+            if prerequisite_string.starts_with('[') {
+                serde_json::from_str(&prerequisite_string).unwrap_or_default()
+            } else {
+                prerequisite_string.split(',').map(|s| s.trim().to_string()).collect()
+            }
+        };
+        
+        // Parse stat_bonuses JSON
+        let stat_bonuses_json: String = row.get(10).unwrap_or_else(|_| "{}".to_string());
+        let stat_bonuses: serde_json::Value = serde_json::from_str(&stat_bonuses_json).unwrap_or(serde_json::json!({}));
+        
+        Ok(SkillNode {
+            node_key: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            node_type: row.get(3)?,
+            primary_stat: row.get(4)?,
+            skill_point_cost: row.get(5)?,
+            level_requirement: row.get(6)?,
+            x_position: row.get(7)?,
+            y_position: row.get(8)?,
+            prerequisite_nodes: prerequisites,
+            stats: SkillNodeStats {
+                strength: stat_bonuses["strength"].as_i64().unwrap_or(0),
+                intelligence: stat_bonuses["intelligence"].as_i64().unwrap_or(0),
+                luck: stat_bonuses["luck"].as_i64().unwrap_or(0),
+                aura: stat_bonuses["aura"].as_i64().unwrap_or(0),
+                will: stat_bonuses["will"].as_i64().unwrap_or(0),
+                health: stat_bonuses["health"].as_i64().unwrap_or(0),
+                mana: stat_bonuses["mana"].as_i64().unwrap_or(0),
+            },
+            color_hex: row.get(11)?,
+            size: row.get(12)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut nodes = Vec::new();
+    for row in rows {
+        nodes.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(nodes)
+}
+
+#[tauri::command]
+async fn get_skill_tree_connections() -> Result<Vec<SkillTreeConnection>, String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT from_node, to_node FROM skill_tree_connections"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(SkillTreeConnection {
+            from_node: row.get(0)?,
+            to_node: row.get(1)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut connections = Vec::new();
+    for row in rows {
+        connections.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(connections)
+}
+
+#[tauri::command]
+async fn get_user_skill_allocations() -> Result<Vec<String>, String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT node_key FROM user_skill_allocations WHERE user_id = 1"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(row.get::<_, String>(0)?)
+    }).map_err(|e| e.to_string())?;
+    
+    let mut allocations = Vec::new();
+    for row in rows {
+        allocations.push(row.map_err(|e| e.to_string())?);
+    }
+    
+    Ok(allocations)
+}
+
+#[tauri::command]
+async fn get_user_skill_stats() -> Result<UserSkillStats, String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Get or create user skill stats
+    let mut stmt = conn.prepare(
+        "SELECT available_skill_points, strength_bonus, intelligence_bonus, luck_bonus,
+                aura_bonus, will_bonus, health_bonus, mana_bonus, total_nodes_allocated
+         FROM user_skill_stats WHERE user_id = 1"
+    ).map_err(|e| e.to_string())?;
+    
+    let result = stmt.query_row([], |row| {
+        Ok(UserSkillStats {
+            available_skill_points: row.get(0)?,
+            strength_bonus: row.get(1)?,
+            intelligence_bonus: row.get(2)?,
+            luck_bonus: row.get(3)?,
+            aura_bonus: row.get(4)?,
+            will_bonus: row.get(5)?,
+            health_bonus: row.get(6)?,
+            mana_bonus: row.get(7)?,
+            total_nodes_allocated: row.get(8)?,
+        })
+    });
+    
+    match result {
+        Ok(stats) => Ok(stats),
+        Err(_) => {
+            // Create default stats if none exist
+            conn.execute(
+                "INSERT INTO user_skill_stats 
+                 (user_id, available_skill_points, strength_bonus, intelligence_bonus, luck_bonus,
+                  aura_bonus, will_bonus, health_bonus, mana_bonus) 
+                 VALUES (1, 10, 0, 0, 0, 0, 0, 0, 0)",
+                []
+            ).map_err(|e| e.to_string())?;
+            
+            Ok(UserSkillStats {
+                available_skill_points: 10,
+                strength_bonus: 0,
+                intelligence_bonus: 0,
+                luck_bonus: 0,
+                aura_bonus: 0,
+                will_bonus: 0,
+                health_bonus: 0,
+                mana_bonus: 0,
+                total_nodes_allocated: 0,
+            })
+        }
+    }
+}
+
+#[tauri::command]
+async fn allocate_skill_node(node_key: String) -> Result<(), String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Check if already allocated
+    let exists: bool = conn.query_row(
+        "SELECT 1 FROM user_skill_allocations WHERE user_id = 1 AND node_key = ?",
+        [&node_key],
+        |_| Ok(true)
+    ).unwrap_or(false);
+    
+    if exists {
+        return Err("Node already allocated".to_string());
+    }
+    
+    // Get node info
+    let (cost, stats): (i64, (i64, i64, i64, i64, i64, i64, i64)) = conn.query_row(
+        "SELECT skill_point_cost, strength_bonus, intelligence_bonus, luck_bonus,
+                aura_bonus, will_bonus, health_bonus, mana_bonus
+         FROM skill_nodes WHERE node_key = ?",
+        [&node_key],
+        |row| Ok((
+            row.get(0)?,
+            (row.get(1).unwrap_or(0), row.get(2).unwrap_or(0), row.get(3).unwrap_or(0),
+             row.get(4).unwrap_or(0), row.get(5).unwrap_or(0), row.get(6).unwrap_or(0), row.get(7).unwrap_or(0))
+        ))
+    ).map_err(|e| format!("Node not found: {}", e))?;
+    
+    // Check available points
+    let available_points: i64 = conn.query_row(
+        "SELECT available_skill_points FROM user_skill_stats WHERE user_id = 1",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    if available_points < cost {
+        return Err("Not enough skill points".to_string());
+    }
+    
+    // Allocate node
+    conn.execute(
+        "INSERT INTO user_skill_allocations (user_id, node_key) VALUES (1, ?)",
+        [&node_key]
+    ).map_err(|e| e.to_string())?;
+    
+    // Update stats
+    conn.execute(
+        "UPDATE user_skill_stats SET 
+         available_skill_points = available_skill_points - ?,
+         strength_bonus = strength_bonus + ?,
+         intelligence_bonus = intelligence_bonus + ?,
+         luck_bonus = luck_bonus + ?,
+         aura_bonus = aura_bonus + ?,
+         will_bonus = will_bonus + ?,
+         health_bonus = health_bonus + ?,
+         mana_bonus = mana_bonus + ?
+         WHERE user_id = 1",
+        [cost, stats.0, stats.1, stats.2, stats.3, stats.4, stats.5, stats.6]
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn deallocate_skill_node(node_key: String) -> Result<(), String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Check if allocated
+    let exists: bool = conn.query_row(
+        "SELECT 1 FROM user_skill_allocations WHERE user_id = 1 AND node_key = ?",
+        [&node_key],
+        |_| Ok(true)
+    ).unwrap_or(false);
+    
+    if !exists {
+        return Err("Node not allocated".to_string());
+    }
+    
+    // Get node info
+    let (cost, stats): (i64, (i64, i64, i64, i64, i64, i64, i64)) = conn.query_row(
+        "SELECT skill_point_cost, strength_bonus, intelligence_bonus, luck_bonus,
+                aura_bonus, will_bonus, health_bonus, mana_bonus
+         FROM skill_nodes WHERE node_key = ?",
+        [&node_key],
+        |row| Ok((
+            row.get(0)?,
+            (row.get(1).unwrap_or(0), row.get(2).unwrap_or(0), row.get(3).unwrap_or(0),
+             row.get(4).unwrap_or(0), row.get(5).unwrap_or(0), row.get(6).unwrap_or(0), row.get(7).unwrap_or(0))
+        ))
+    ).map_err(|e| format!("Node not found: {}", e))?;
+    
+    // Remove allocation
+    conn.execute(
+        "DELETE FROM user_skill_allocations WHERE user_id = 1 AND node_key = ?",
+        [&node_key]
+    ).map_err(|e| e.to_string())?;
+    
+    // Restore stats
+    conn.execute(
+        "UPDATE user_skill_stats SET 
+         available_skill_points = available_skill_points + ?,
+         strength_bonus = strength_bonus - ?,
+         intelligence_bonus = intelligence_bonus - ?,
+         luck_bonus = luck_bonus - ?,
+         aura_bonus = aura_bonus - ?,
+         will_bonus = will_bonus - ?,
+         health_bonus = health_bonus - ?,
+         mana_bonus = mana_bonus - ?
+         WHERE user_id = 1",
+        [cost, stats.0, stats.1, stats.2, stats.3, stats.4, stats.5, stats.6]
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn reset_skill_tree() -> Result<(), String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Get total allocated points
+    let total_points: i64 = conn.query_row(
+        "SELECT COUNT(*) * (SELECT AVG(skill_point_cost) FROM skill_nodes s 
+                          INNER JOIN user_skill_allocations u ON s.node_key = u.node_key
+                          WHERE u.user_id = 1)
+         FROM user_skill_allocations WHERE user_id = 1",
+        [],
+        |row| row.get(0)
+    ).unwrap_or(0);
+    
+    // Clear all allocations
+    conn.execute(
+        "DELETE FROM user_skill_allocations WHERE user_id = 1",
+        []
+    ).map_err(|e| e.to_string())?;
+    
+    // Reset stats and restore points
+    conn.execute(
+        "UPDATE user_skill_stats SET 
+         available_skill_points = available_skill_points + ?,
+         strength_bonus = 0,
+         intelligence_bonus = 0,
+         luck_bonus = 0,
+         aura_bonus = 0,
+         will_bonus = 0,
+         health_bonus = 0,
+         mana_bonus = 0
+         WHERE user_id = 1",
+        [total_points]
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_node_position(node_key: String, x_position: f64, y_position: f64) -> Result<(), String> {
+    let conn = get_db_connection().map_err(|e| e.to_string())?;
+    
+    // Update node position in database
+    conn.execute(
+        "UPDATE skill_nodes SET x_position = ?, y_position = ? WHERE node_key = ?",
+        rusqlite::params![x_position, y_position, node_key]
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
 }
 
 // Get recommended task difficulty based on user stats
@@ -1256,6 +1702,14 @@ pub fn run() {
             get_recommended_difficulty,
             get_active_buffs,
             apply_buff,
+            get_skill_nodes,
+            get_skill_tree_connections,
+            get_user_skill_allocations,
+            get_user_skill_stats,
+            allocate_skill_node,
+            deallocate_skill_node,
+            reset_skill_tree,
+            update_node_position,
             avatar::get_user_equipment,
             avatar::equip_item,
             avatar::unequip_item,
