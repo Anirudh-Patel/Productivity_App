@@ -200,7 +200,17 @@ export const useGameStore = create<GameState>((set, get) => ({
           console.log('taskToComplete before completion:', taskToComplete);
           
           const completedTask: Task = await invoke('complete_task', { taskId });
-          
+
+          // GitHub integration: close the linked issue if close-on-complete is
+          // enabled. Non-fatal — completion never fails because of GitHub.
+          // Dynamic import avoids a static store-to-store dependency cycle.
+          try {
+            const { useGithubStore } = await import('./githubStore');
+            await useGithubStore.getState().closeIssueForTask(taskId);
+          } catch (githubError) {
+            console.warn('GitHub close-on-complete failed:', githubError);
+          }
+
           set(state => ({
             tasks: {
               ...state.tasks,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import { useGlobalShortcuts } from '../../../hooks/useKeyboardShortcuts'
+import { useGithubSync } from '../../../hooks/useGithubSync'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
 import TimerWidget from '../ui/TimerWidget'
 
@@ -14,6 +15,9 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const navigate = useNavigate();
+
+  // GitHub issues -> tasks sync (on start + every 30 min)
+  useGithubSync();
 
   // Global keyboard shortcuts
   const shortcuts = useGlobalShortcuts({

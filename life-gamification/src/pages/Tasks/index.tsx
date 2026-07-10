@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp, Play, Square, Timer } from 'lucide-react'
+import { Plus, Filter, Search, CheckSquare, Sword, Clock, Star, TrendingUp, Play, Square, Timer, Github } from 'lucide-react'
 import { useGameStore } from '../../store/gameStore';
+import { useGithubStore } from '../../store/githubStore';
+import GithubSyncBar from '../../shared/components/ui/GithubSyncBar';
 import { DIFFICULTY_LEVELS } from '../../types';
 import type { Task, Project } from '../../types';
 import ProjectChipBar from '../../shared/components/ui/ProjectChipBar';
@@ -252,6 +254,9 @@ const Tasks = () => {
             </button>
           </div>
 
+          {/* GitHub sync status */}
+          <GithubSyncBar />
+
           {/* Project filter bar */}
           <ProjectChipBar
             projects={projects.all}
@@ -408,6 +413,7 @@ const TaskCard = ({ task, project = null, onComplete, onUpdateProgress, isLoadin
 
   const activeTimer = useGameStore((s) => s.timer.active);
   const timerLoading = useGameStore((s) => s.timer.loading);
+  const githubLink = useGithubStore((s) => s.taskLinks[task.id]);
   const startTimer = useGameStore((s) => s.startTimer);
   const stopTimer = useGameStore((s) => s.stopTimer);
 
@@ -516,6 +522,15 @@ const TaskCard = ({ task, project = null, onComplete, onUpdateProgress, isLoadin
               >
                 <span>{project.icon}</span>
                 {project.name}
+              </span>
+            )}
+            {githubLink && (
+              <span
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-600 text-gray-300 bg-gray-500/10"
+                title={`GitHub issue: ${githubLink.repo}#${githubLink.issue_number}`}
+              >
+                <Github className="w-3 h-3" />
+                {githubLink.repo.split('/')[1] || githubLink.repo}#{githubLink.issue_number}
               </span>
             )}
             {task.task_type === 'goal' && (

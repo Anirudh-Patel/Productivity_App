@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database } from 'lucide-react';
+import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github } from 'lucide-react';
+import GithubSettingsPanel from '../../shared/components/ui/GithubSettingsPanel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGameStore } from '../../store/gameStore';
 import { useRenderPerformance } from '../../utils/performance';
@@ -21,6 +22,7 @@ const Settings = () => {
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'data', label: 'Data Management', icon: Database },
+    { id: 'github', label: 'GitHub', icon: Github },
     { id: 'preferences', label: 'Preferences', icon: Monitor },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy', icon: Shield },
@@ -366,6 +368,13 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* GitHub Section */}
+          {activeSection === 'github' && (
+            <FadeIn delay={100}>
+              <GithubSettingsPanel />
+            </FadeIn>
+          )}
+
           {/* Preferences Section */}
           {activeSection === 'preferences' && (
             <FadeIn delay={100}>
@@ -374,7 +383,7 @@ const Settings = () => {
           )}
 
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'data', 'preferences'].includes(activeSection) && (
+          {!['appearance', 'profile', 'data', 'github', 'preferences'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">

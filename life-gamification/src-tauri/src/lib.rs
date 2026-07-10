@@ -10,6 +10,7 @@ use std::path::Path;
 // Import avatar commands
 mod commands;
 use commands::avatar;
+use commands::github;
 
 mod database;
 use database::DbConnection;
@@ -2886,7 +2887,17 @@ pub fn run() {
             schedule_automatic_backups,
             restore_from_backup,
             list_available_backups,
-            get_backup_info
+            get_backup_info,
+            github::github_check_cli,
+            github::github_list_repos,
+            github::github_add_repo,
+            github::github_remove_repo,
+            github::github_toggle_repo,
+            github::github_get_settings,
+            github::github_update_settings,
+            github::github_get_task_links,
+            github::github_close_issue,
+            github::github_sync
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
