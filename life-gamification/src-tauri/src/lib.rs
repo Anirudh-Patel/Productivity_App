@@ -1,15 +1,16 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::sync::Mutex;
-use chrono::{DateTime, Utc, Duration};
+use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, Result};
 use tauri::Manager;
 use std::fs;
 use std::path::Path;
 
-// Import avatar commands
+// Import avatar and calendar commands
 mod commands;
 use commands::avatar;
+use commands::calendar;
 
 mod database;
 use database::DbConnection;
@@ -2402,23 +2403,8 @@ async fn purchase_item(item_id: String, price: i64) -> Result<User, String> {
 }
 
 
-// Calendar Integration Commands
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CalendarEvent {
-    pub id: String,
-    pub title: String,
-    pub start: String,
-    pub end: Option<String>,
-    pub all_day: Option<bool>,
-    pub description: Option<String>,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CalendarConnectionResult {
-    pub connected: bool,
-    pub calendar_id: Option<String>,
-}
+// Calendar Integration Commands live in commands/calendar.rs (real Calendar.app
+// sync via osascript/JXA — replaces the previous mock implementations).
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyStats {
@@ -2429,26 +2415,6 @@ pub struct DailyStats {
     pub xp_earned: i64,
     pub gold_earned: i64,
     pub productivity_score: f64,
-}
-
-#[tauri::command]
-async fn connect_apple_calendar() -> Result<CalendarConnectionResult, String> {
-    // For now, return a mock connection
-    // In a real implementation, you would:
-    // 1. Request calendar permissions
-    // 2. Access EventKit on macOS
-    // 3. Return the primary calendar ID
-    
-    Ok(CalendarConnectionResult {
-        connected: true,
-        calendar_id: Some("primary".to_string()),
-    })
-}
-
-#[tauri::command]
-async fn disconnect_apple_calendar() -> Result<(), String> {
-    // Disconnect from Apple Calendar
-    Ok(())
 }
 
 // Database performance initialization
@@ -2763,32 +2729,6 @@ async fn get_backup_info(backup_path: String) -> Result<serde_json::Value, Strin
     }
 }
 
-#[tauri::command]
-async fn get_apple_calendar_events(calendar_id: String) -> Result<Vec<CalendarEvent>, String> {
-    // For now, return empty events
-    // In a real implementation, you would:
-    // 1. Use EventKit to fetch events from the specified calendar
-    // 2. Convert them to CalendarEvent structs
-    // 3. Return the list
-    
-    let _calendar_id = calendar_id; // Avoid unused parameter warning
-    
-    // Mock events for demonstration
-    let events = vec![
-        CalendarEvent {
-            id: "apple-event-1".to_string(),
-            title: "Team Meeting".to_string(),
-            start: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            end: Some((Utc::now() + Duration::hours(1)).format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-            all_day: Some(false),
-            description: Some("Weekly team sync".to_string()),
-            source: "apple".to_string(),
-        },
-    ];
-    
-    Ok(events)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2877,16 +2817,24 @@ pub fn run() {
             avatar::get_avatar_config,
             get_daily_stats,
             update_daily_stats,
-            connect_apple_calendar,
-            disconnect_apple_calendar,
-            get_apple_calendar_events,
             initialize_database,
             create_achievement_popup,
             create_backup,
             schedule_automatic_backups,
             restore_from_backup,
             list_available_backups,
-            get_backup_info
+            get_backup_info,
+            calendar::connect_apple_calendar,
+            calendar::disconnect_apple_calendar,
+            calendar::get_apple_calendar_events,
+            calendar::get_apple_calendar_list,
+            calendar::create_calendar_event,
+            calendar::update_calendar_event_title,
+            calendar::get_calendar_import_rules,
+            calendar::set_calendar_import_rule,
+            calendar::add_task_to_calendar,
+            calendar::mark_calendar_event_completed,
+            calendar::import_calendar_events_as_tasks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

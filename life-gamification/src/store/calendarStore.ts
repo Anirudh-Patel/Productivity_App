@@ -13,6 +13,13 @@ export interface CalendarEvent {
   source: 'google' | 'apple' | 'local';
   sourceId?: string;
   color?: string;
+  /** Name of the Calendar.app calendar this event belongs to (apple source). */
+  calendar?: string;
+}
+
+export interface CalendarImportRule {
+  calendar_name: string;
+  enabled: boolean;
 }
 
 interface CalendarCredentials {
@@ -26,15 +33,19 @@ interface CalendarState {
   // Connection status
   googleCalendarConnected: boolean;
   appleCalendarConnected: boolean;
-  
+
   // Synced events
   syncedCalendars: CalendarEvent[];
   lastSyncTime: Date | null;
   isSyncing: boolean;
-  
+
+  // Apple Calendar.app metadata
+  appleCalendars: string[];
+  importRules: CalendarImportRule[];
+
   // Credentials (stored securely)
   credentials: CalendarCredentials;
-  
+
   // Actions
   connectGoogleCalendar: () => Promise<void>;
   disconnectGoogleCalendar: () => Promise<void>;
@@ -42,6 +53,11 @@ interface CalendarState {
   disconnectAppleCalendar: () => Promise<void>;
   syncCalendars: () => Promise<void>;
   setCredentials: (creds: Partial<CalendarCredentials>) => void;
+  fetchAppleCalendars: () => Promise<void>;
+  fetchImportRules: () => Promise<void>;
+  setImportRule: (calendarName: string, enabled: boolean) => Promise<void>;
+  runAutoImport: () => Promise<number>;
+  addTaskToCalendar: (taskId: number) => Promise<string>;
 }
 
 // Google Calendar API configuration
@@ -58,6 +74,8 @@ export const useCalendarStore = create<CalendarState>()(
       syncedCalendars: [],
       lastSyncTime: null,
       isSyncing: false,
+      appleCalendars: [],
+      importRules: [],
       credentials: {},
 
       connectGoogleCalendar: async () => {
@@ -150,22 +168,23 @@ export const useCalendarStore = create<CalendarState>()(
 
       connectAppleCalendar: async () => {
         try {
-          // For Apple Calendar, we'll use EventKit through Tauri
-          // This requires native code in the Tauri backend
-          const result = await invoke<{ connected: boolean; calendarId?: string }>(
+          // Real Calendar.app connection via osascript/JXA in the Rust backend.
+          // The first call triggers the one-time macOS Calendar permission prompt.
+          const result = await invoke<{ connected: boolean; calendarId?: string; calendars?: string[] }>(
             'connect_apple_calendar'
           );
-          
+
           if (result.connected) {
             set({
               appleCalendarConnected: true,
+              appleCalendars: result.calendars ?? [],
               credentials: {
                 ...get().credentials,
                 appleCalendarId: result.calendarId
               }
             });
-            
-            logger.info('Connected to Apple Calendar', {}, 'CalendarStore');
+
+            logger.info('Connected to Apple Calendar', { calendars: result.calendars?.length }, 'CalendarStore');
           }
         } catch (error) {
           logger.error('Failed to connect Apple Calendar', error, 'CalendarStore');
@@ -233,25 +252,41 @@ export const useCalendarStore = create<CalendarState>()(
             }
           }
           
-          // Sync Apple Calendar
+          // Sync Apple Calendar (real Calendar.app events, bounded to ±30 days)
           if (state.appleCalendarConnected) {
             try {
               const appleEvents = await invoke<CalendarEvent[]>('get_apple_calendar_events', {
                 calendarId: state.credentials.appleCalendarId
               });
-              
+
               appleEvents.forEach(event => {
                 events.push({
                   ...event,
                   id: `apple-${event.id}`,
+                  sourceId: event.id,
                   source: 'apple'
                 });
               });
+
+              // Auto-import: create tasks for upcoming events from calendars with
+              // an enabled import rule (dedup handled by the backend on event uid).
+              if (get().importRules.some(rule => rule.enabled)) {
+                try {
+                  const imported = await invoke<number>('import_calendar_events_as_tasks');
+                  if (imported > 0) {
+                    logger.info('Auto-imported calendar events as tasks', { imported }, 'CalendarStore');
+                    const { useGameStore } = await import('./gameStore');
+                    await useGameStore.getState().fetchTasks();
+                  }
+                } catch (importError) {
+                  logger.error('Calendar auto-import failed', importError, 'CalendarStore');
+                }
+              }
             } catch (error) {
               logger.error('Failed to fetch Apple Calendar events', error, 'CalendarStore');
             }
           }
-          
+
           set({
             syncedCalendars: events,
             lastSyncTime: new Date(),
@@ -275,6 +310,67 @@ export const useCalendarStore = create<CalendarState>()(
             ...creds
           }
         });
+      },
+
+      fetchAppleCalendars: async () => {
+        try {
+          const calendars = await invoke<string[]>('get_apple_calendar_list');
+          set({ appleCalendars: calendars, appleCalendarConnected: true });
+        } catch (error) {
+          logger.error('Failed to fetch Apple calendar list', error, 'CalendarStore');
+          throw error;
+        }
+      },
+
+      fetchImportRules: async () => {
+        try {
+          const rules = await invoke<CalendarImportRule[]>('get_calendar_import_rules');
+          set({ importRules: rules });
+        } catch (error) {
+          logger.error('Failed to fetch calendar import rules', error, 'CalendarStore');
+          throw error;
+        }
+      },
+
+      setImportRule: async (calendarName: string, enabled: boolean) => {
+        try {
+          await invoke('set_calendar_import_rule', { calendarName, enabled });
+          const existing = get().importRules;
+          const next = existing.some(r => r.calendar_name === calendarName)
+            ? existing.map(r => (r.calendar_name === calendarName ? { ...r, enabled } : r))
+            : [...existing, { calendar_name: calendarName, enabled }];
+          set({ importRules: next });
+        } catch (error) {
+          logger.error('Failed to update calendar import rule', error, 'CalendarStore');
+          throw error;
+        }
+      },
+
+      runAutoImport: async () => {
+        try {
+          const imported = await invoke<number>('import_calendar_events_as_tasks');
+          if (imported > 0) {
+            const { useGameStore } = await import('./gameStore');
+            await useGameStore.getState().fetchTasks();
+          }
+          logger.info('Calendar import complete', { imported }, 'CalendarStore');
+          return imported;
+        } catch (error) {
+          logger.error('Calendar import failed', error, 'CalendarStore');
+          throw error;
+        }
+      },
+
+      addTaskToCalendar: async (taskId: number) => {
+        try {
+          // Creates a 1h event in the "Quests" calendar and links it to the task.
+          const uid = await invoke<string>('add_task_to_calendar', { taskId });
+          logger.info('Task pushed to Calendar.app', { taskId, uid }, 'CalendarStore');
+          return uid;
+        } catch (error) {
+          logger.error('Failed to add task to calendar', error, 'CalendarStore');
+          throw error;
+        }
       }
     }),
     {

@@ -26,7 +26,7 @@ export const UpcomingEventsWidget = ({
   maxEvents = 5,
   onEventClick
 }: UpcomingEventsWidgetProps) => {
-  const { tasks, completeTask } = useGameStore();
+  const { tasks, completeTask, createTask } = useGameStore();
   const { syncedCalendars, syncCalendars, isSyncing, lastSyncTime } = useCalendarStore();
   const [converting, setConverting] = useState<string | null>(null);
 
@@ -89,15 +89,18 @@ export const UpcomingEventsWidget = ({
   const handleConvertToQuest = async (event: CalendarEventWithSource) => {
     setConverting(event.id);
     try {
-      // In a real implementation, this would use the event analysis service
-      // and create a task through the game store
-      console.log('Converting event to quest:', event);
-      // TODO: Implement actual conversion logic
-      setTimeout(() => {
-        setConverting(null);
-      }, 1000);
+      await createTask({
+        title: event.title,
+        description: event.description,
+        category: 'general',
+        difficulty: 3,
+        priority: 3,
+        task_type: 'standard',
+        due_date: event.start.toISOString(),
+      });
     } catch (error) {
       console.error('Failed to convert event:', error);
+    } finally {
       setConverting(null);
     }
   };
