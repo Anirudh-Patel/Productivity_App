@@ -12,6 +12,7 @@ mod commands;
 use commands::avatar;
 use commands::calendar;
 use commands::github;
+use commands::health;
 
 mod database;
 use database::DbConnection;
@@ -3270,7 +3271,13 @@ pub fn run() {
             calendar::set_calendar_import_rule,
             calendar::add_task_to_calendar,
             calendar::mark_calendar_event_completed,
-            calendar::import_calendar_events_as_tasks
+            calendar::import_calendar_events_as_tasks,
+            health::set_health_folder,
+            health::get_health_settings,
+            health::scan_health_folder,
+            health::get_workouts,
+            health::verify_fitness_tasks,
+            health::set_task_verification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

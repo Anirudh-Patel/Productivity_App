@@ -1,0 +1,18 @@
+{
+  "workouts": [
+    {
+      "name": "Outdoor Cycle",
+      "start": "2026-07-09 06:05:00 -0700",
+      "end": "2026-07-09 06:53:30 -0700",
+      "duration": 48.5,
+      "activeEnergyBurned": { "qty": 410, "units": "kcal" },
+      "distance": { "qty": 12.4, "units": "mi" }
+    },
+    {
+      "name": "Functional Strength Training",
+      "start": "2026-07-10 07:30:00 -0700",
+      "duration": 35,
+      "activeEnergyBurned": { "qty": 900, "units": "kJ" }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import Header from './Header'
 import { useGlobalShortcuts } from '../../../hooks/useKeyboardShortcuts'
 import { useGithubSync } from '../../../hooks/useGithubSync'
+import { useHealthSync } from '../../../hooks/useHealthSync'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
 import TimerWidget from '../ui/TimerWidget'
 
@@ -18,6 +19,9 @@ const Layout = ({ children }: LayoutProps) => {
 
   // GitHub issues -> tasks sync (on start + every 30 min)
   useGithubSync();
+
+  // Apple Health workout scan -> fitness quest verification (on start + every 15 min)
+  useHealthSync();
 
   // Global keyboard shortcuts
   const shortcuts = useGlobalShortcuts({
