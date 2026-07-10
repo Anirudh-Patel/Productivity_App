@@ -14,6 +14,7 @@ use commands::calendar;
 use commands::finance;
 use commands::github;
 use commands::health;
+use commands::reminders;
 
 mod database;
 use database::DbConnection;
@@ -3286,7 +3287,13 @@ pub fn run() {
             finance::finance_get_transactions,
             finance::finance_get_spending_summary,
             finance::finance_get_monthly_totals,
-            finance::finance_set_category
+            finance::finance_set_category,
+            reminders::connect_apple_reminders,
+            reminders::get_reminder_lists,
+            reminders::set_reminder_list_rule,
+            reminders::get_reminders_settings,
+            reminders::mark_reminder_completed,
+            reminders::sync_reminders
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
