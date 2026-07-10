@@ -1619,13 +1619,35 @@ async fn mark_notification_actioned(
 }
 
 #[tauri::command]
+async fn mark_notification_sent(db: tauri::State<'_, DbConnection>, notification_id: i64) -> Result<String, String> {
+    let conn = db.lock().await;
+
+    // The mark_notification_sent DB trigger (migration 008) sets sent_at and
+    // inserts the notification_history row when status transitions to 'sent'.
+    conn.execute(
+        "UPDATE scheduled_notifications SET status = 'sent' WHERE id = ?1 AND status IN ('pending', 'snoozed')",
+        [notification_id],
+    ).map_err(|e| format!("Failed to mark notification sent: {}", e))?;
+
+    Ok("Notification marked as sent".to_string())
+}
+
+#[tauri::command]
 async fn get_pending_notifications(db: tauri::State<'_, DbConnection>) -> Result<Vec<ScheduledNotification>, String> {
     let conn = db.lock().await;
 
+    // NOTE: v_pending_notifications does not expose all columns needed here (status,
+    // snooze fields, timestamps), so query the table directly with the same
+    // "due within 5 minutes" window, also including snoozed notifications whose
+    // snooze period has elapsed.
     let mut stmt = conn.prepare(
         "SELECT id, user_id, task_id, notification_type, title, message, scheduled_for, status,
                 snoozed_until, snooze_count, priority, action_url, created_at, sent_at
-         FROM v_pending_notifications"
+         FROM scheduled_notifications
+         WHERE user_id = 1
+           AND ((status = 'pending' AND datetime(scheduled_for) <= datetime('now', '+5 minutes'))
+             OR (status = 'snoozed' AND snoozed_until IS NOT NULL AND datetime(snoozed_until) <= datetime('now', '+5 minutes')))
+         ORDER BY scheduled_for ASC"
     ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let notifications_iter = stmt.query_map([], |row| {
@@ -3253,6 +3275,7 @@ pub fn run() {
             update_notification_preferences,
             get_notification_history,
             mark_notification_actioned,
+            mark_notification_sent,
             get_pending_notifications,
             get_user_achievements,
             check_achievements,

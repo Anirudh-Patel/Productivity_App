@@ -7,6 +7,7 @@ import { FadeIn } from '../../shared/components/ui/AnimatedComponents';
 import { AvatarSelector } from '../../shared/components/ui/AvatarSelector';
 import DataExportModal from '../../shared/components/ui/DataExportModal';
 import AdvancedPreferencesPanel from '../../shared/components/ui/AdvancedPreferencesPanel';
+import NotificationSettingsPanel from '../../shared/components/ui/NotificationSettingsPanel';
 
 const Settings = () => {
   useRenderPerformance('Settings', process.env.NODE_ENV === 'development');
@@ -373,8 +374,15 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* Notifications Section */}
+          {activeSection === 'notifications' && (
+            <FadeIn delay={100}>
+              <NotificationSettingsPanel />
+            </FadeIn>
+          )}
+
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'data', 'preferences'].includes(activeSection) && (
+          {!['appearance', 'profile', 'data', 'preferences', 'notifications'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">

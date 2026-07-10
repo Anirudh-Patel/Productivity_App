@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Sword, Zap, Repeat, Calendar, Clock } from 'lucide-react';
+import { X, Sword, Zap, Repeat, Calendar, Clock, Bell } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { DIFFICULTY_LEVELS, RecurrencePattern } from '../../../types';
 import type { CreateTaskRequest } from '../../../types';
@@ -12,10 +12,23 @@ interface CreateTaskModalProps {
   onClose: () => void;
 }
 
+type ReminderOption = 'none' | 'at_due' | '15m' | '1h' | '1d';
+
+const REMINDER_OFFSET_MINUTES: Record<Exclude<ReminderOption, 'none'>, number> = {
+  at_due: 0,
+  '15m': 15,
+  '1h': 60,
+  '1d': 1440,
+};
+
+// SQLite CURRENT_TIMESTAMP-compatible UTC format ("YYYY-MM-DD HH:MM:SS").
+const toSqliteUtc = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ');
+
 const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
-  const { createTask, updateEstimatedTime, user, tasks, projects, fetchProjects } = useGameStore();
+  const { createTask, updateEstimatedTime, scheduleNotification, user, tasks, projects, fetchProjects } = useGameStore();
   const [loading, setLoading] = useState(false);
   const [estimatedMinutes, setEstimatedMinutes] = useState<string>('');
+  const [reminderOption, setReminderOption] = useState<ReminderOption>('none');
   const [modalTab, setModalTab] = useState<'manual' | 'quick'>('quick');
   const [taskType, setTaskType] = useState<'standard' | 'goal' | 'recurring'>('standard');
   const [selectedRecurrencePattern, setSelectedRecurrencePattern] = useState<string>('daily');
@@ -69,6 +82,28 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         }
       }
 
+      // Schedule the optional due-date reminder for the new quest.
+      if (createdTask?.id && formData.due_date && reminderOption !== 'none') {
+        try {
+          const dueDate = new Date(formData.due_date);
+          const remindAt = new Date(dueDate.getTime() - REMINDER_OFFSET_MINUTES[reminderOption] * 60_000);
+          if (!Number.isNaN(remindAt.getTime()) && remindAt.getTime() > Date.now()) {
+            await scheduleNotification({
+              task_id: createdTask.id,
+              notification_type: 'due_soon',
+              title: 'Quest Due Soon',
+              message: reminderOption === 'at_due'
+                ? `"${formData.title}" is due now`
+                : `"${formData.title}" is due soon`,
+              scheduled_for: toSqliteUtc(remindAt),
+              priority: (formData.priority ?? 3) >= 4 ? 'high' : 'medium',
+            });
+          }
+        } catch (reminderError) {
+          console.error('Failed to schedule reminder:', reminderError);
+        }
+      }
+
       // Reset form and close modal
       setFormData({
         title: '',
@@ -80,6 +115,7 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
         project_id: undefined,
       });
       setEstimatedMinutes('');
+      setReminderOption('none');
       setTaskType('standard');
       setSelectedRecurrencePattern('daily');
       setModalTab('quick');
@@ -486,6 +522,45 @@ const CreateTaskModal = ({ isOpen, onClose }: CreateTaskModalProps) => {
                 />
                 <div className="text-xs text-gray-400 mt-1">
                   Track how long you expect this quest to take. Compare against actual time later.
+                </div>
+              </div>
+
+              {/* Due Date & Reminder */}
+              <div>
+                <label htmlFor="due-date" className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-solo-accent" />
+                  Due Date
+                </label>
+                <input
+                  id="due-date"
+                  type="datetime-local"
+                  value={formData.due_date || ''}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value || undefined })}
+                  className="w-full px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent"
+                />
+                <div className="mt-3">
+                  <label htmlFor="reminder" className="block text-sm font-medium mb-2 flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-solo-accent" />
+                    Remind Me
+                  </label>
+                  <select
+                    id="reminder"
+                    value={reminderOption}
+                    disabled={!formData.due_date}
+                    onChange={(e) => setReminderOption(e.target.value as ReminderOption)}
+                    className="w-full px-3 py-2 bg-solo-bg border border-gray-700 rounded-lg focus:outline-none focus:border-solo-accent disabled:opacity-50"
+                  >
+                    <option value="none">No reminder</option>
+                    <option value="at_due">At due time</option>
+                    <option value="15m">15 minutes before</option>
+                    <option value="1h">1 hour before</option>
+                    <option value="1d">1 day before</option>
+                  </select>
+                  {!formData.due_date && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      Set a due date to enable reminders.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
