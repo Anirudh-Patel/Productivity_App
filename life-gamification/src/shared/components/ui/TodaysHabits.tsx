@@ -13,12 +13,13 @@ export const TodaysHabits = ({ onTaskCompleted }: TodaysHabitsProps) => {
   const [loading, setLoading] = useState(false);
   const [generatingInstances, setGeneratingInstances] = useState(false);
 
-  // Filter for today's recurring task instances
-  const todaysHabits = tasks.filter(
-    (task) =>
-      task.status === 'active' &&
-      task.parent_recurring_task_id !== null &&
-      task.instance_date === new Date().toISOString().split('T')[0]
+  // Filter for today's recurring task instances. The store keeps tasks split
+  // into active/completed lists; today's habits can live in either.
+  const today = new Date().toISOString().split('T')[0];
+  const todaysHabits = [...tasks.active, ...tasks.completed].filter(
+    (task: Task) =>
+      (task as any).parent_recurring_task_id != null &&
+      (task as any).instance_date === today
   );
 
   // Generate recurring instances on mount
