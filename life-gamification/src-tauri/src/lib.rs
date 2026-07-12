@@ -16,6 +16,8 @@ use commands::finance;
 use commands::github;
 use commands::health;
 use commands::reminders;
+use commands::connections;
+use commands::simplefin;
 
 mod database;
 use database::DbConnection;
@@ -3604,7 +3606,11 @@ pub fn run() {
             oauth::get_google_calendar_events,
             oauth::create_google_calendar_event,
             oauth::update_google_calendar_event,
-            oauth::delete_google_calendar_event
+            oauth::delete_google_calendar_event,
+            connections::get_connections,
+            connections::disconnect_provider,
+            simplefin::simplefin_connect,
+            simplefin::simplefin_sync
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

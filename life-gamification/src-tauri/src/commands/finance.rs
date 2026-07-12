@@ -18,6 +18,8 @@ pub struct FinanceAccount {
     pub name: String,
     pub kind: String,
     pub created_at: Option<String>,
+    pub balance_cents: Option<i64>, // live balance from SimpleFIN sync; NULL for CSV-only accounts
+    pub currency: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -90,7 +92,8 @@ fn fnv1a_hex(input: &str) -> String {
 
 /// Parse a currency string into signed cents without float rounding.
 /// Handles "$1,234.56", "-6.45", "($424.00)", "+12", "1.5".
-fn parse_amount_cents(raw: &str) -> Option<i64> {
+/// Shared with the SimpleFIN importer (amounts arrive as "-12.34" strings).
+pub(crate) fn parse_amount_cents(raw: &str) -> Option<i64> {
     let mut s = raw.trim().to_string();
     if s.is_empty() {
         return None;
@@ -383,7 +386,7 @@ pub fn parse_transactions(content: &str) -> Result<(String, Vec<ParsedTransactio
 
 // ---------- Import core (pure Connection fns, unit-testable) ----------
 
-fn load_rules(conn: &Connection) -> Result<Vec<(String, String)>, String> {
+pub(crate) fn load_rules(conn: &Connection) -> Result<Vec<(String, String)>, String> {
     let mut stmt = conn
         .prepare("SELECT pattern, category FROM category_rules ORDER BY priority DESC, id ASC")
         .map_err(|e| format!("Failed to prepare rules query: {}", e))?;
@@ -394,7 +397,7 @@ fn load_rules(conn: &Connection) -> Result<Vec<(String, String)>, String> {
     rules.map_err(|e| format!("Failed to collect rules: {}", e))
 }
 
-fn categorize(rules: &[(String, String)], merchant: &str, description: &str, hint: Option<&str>) -> String {
+pub(crate) fn categorize(rules: &[(String, String)], merchant: &str, description: &str, hint: Option<&str>) -> String {
     let haystack = format!("{} {}", merchant, description).to_uppercase();
     for (pattern, category) in rules {
         if haystack.contains(&pattern.to_uppercase()) {
@@ -491,7 +494,7 @@ pub fn import_csv_into(
 pub async fn finance_get_accounts(db: State<'_, DbConnection>) -> Result<Vec<FinanceAccount>, String> {
     let conn = db.lock().await;
     let mut stmt = conn
-        .prepare("SELECT id, name, kind, created_at FROM accounts ORDER BY name")
+        .prepare("SELECT id, name, kind, created_at, balance_cents, currency FROM accounts ORDER BY name")
         .map_err(|e| format!("Failed to prepare accounts query: {}", e))?;
     let accounts: Result<Vec<FinanceAccount>, _> = stmt
         .query_map([], |row| {
@@ -500,6 +503,8 @@ pub async fn finance_get_accounts(db: State<'_, DbConnection>) -> Result<Vec<Fin
                 name: row.get(1)?,
                 kind: row.get(2)?,
                 created_at: row.get(3)?,
+                balance_cents: row.get(4)?,
+                currency: row.get(5)?,
             })
         })
         .map_err(|e| format!("Failed to query accounts: {}", e))?
@@ -528,7 +533,7 @@ pub async fn finance_create_account(
     .map_err(|e| format!("Failed to create account: {}", e))?;
     let id = conn.last_insert_rowid();
     conn.query_row(
-        "SELECT id, name, kind, created_at FROM accounts WHERE id = ?1",
+        "SELECT id, name, kind, created_at, balance_cents, currency FROM accounts WHERE id = ?1",
         [id],
         |row| {
             Ok(FinanceAccount {
@@ -536,6 +541,8 @@ pub async fn finance_create_account(
                 name: row.get(1)?,
                 kind: row.get(2)?,
                 created_at: row.get(3)?,
+                balance_cents: row.get(4)?,
+                currency: row.get(5)?,
             })
         },
     )

@@ -7,6 +7,8 @@ export interface FinanceAccount {
   name: string;
   kind: 'bank' | 'credit' | 'brokerage';
   created_at?: string | null;
+  balance_cents?: number | null; // live balance from SimpleFIN; null for CSV-only accounts
+  currency?: string | null;
 }
 
 export interface FinanceTransaction {

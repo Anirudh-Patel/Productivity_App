@@ -232,6 +232,9 @@ const Finance = () => {
 
   const isCurrentMonth = selectedMonth >= currentMonth();
 
+  // Accounts with a live balance (populated by SimpleFIN sync).
+  const accountsWithBalance = accounts.filter((a) => a.balance_cents != null);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -346,6 +349,32 @@ const Finance = () => {
         )}
         {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
       </div>
+
+      {/* Live account balances (SimpleFIN-synced accounts) */}
+      {accountsWithBalance.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {accountsWithBalance.map((account) => (
+            <div
+              key={account.id}
+              className="bg-theme-primary border border-gray-800 rounded-lg p-4 flex items-center justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate" title={account.name}>
+                  {account.name}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{account.kind} · live balance</p>
+              </div>
+              <p
+                className={`text-lg font-bold whitespace-nowrap ${
+                  (account.balance_cents ?? 0) < 0 ? 'text-red-400' : 'text-green-400'
+                }`}
+              >
+                {formatCents(account.balance_cents ?? 0)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

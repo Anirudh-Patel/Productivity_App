@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github, Calendar as CalendarIcon, RefreshCw, Link } from 'lucide-react';
+import { Settings as SettingsIcon, Palette, User, Bell, Shield, Monitor, Database, Github, Calendar as CalendarIcon, RefreshCw, Link, Plug } from 'lucide-react';
+import ConnectionsPanel from '../../shared/components/ui/ConnectionsPanel';
 import GithubSettingsPanel from '../../shared/components/ui/GithubSettingsPanel';
 import { Activity, ListChecks } from 'lucide-react';
 import HealthSettingsPanel from '../../shared/components/ui/HealthSettingsPanel';
@@ -80,6 +81,7 @@ const Settings = () => {
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+    { id: 'connections', label: 'Connections', icon: Plug },
     { id: 'data', label: 'Data Management', icon: Database },
     { id: 'github', label: 'GitHub', icon: Github },
     { id: 'health', label: 'Health', icon: Activity },
@@ -531,6 +533,13 @@ const Settings = () => {
             </FadeIn>
           )}
 
+          {/* Connections Section */}
+          {activeSection === 'connections' && (
+            <FadeIn delay={100}>
+              <ConnectionsPanel />
+            </FadeIn>
+          )}
+
           {/* GitHub Section */}
           {activeSection === 'github' && (
             <FadeIn delay={100}>
@@ -574,7 +583,7 @@ const Settings = () => {
           )}
 
           {/* Other sections placeholder */}
-          {!['appearance', 'profile', 'calendar', 'data', 'github', 'health', 'capture', 'reminders', 'preferences', 'notifications'].includes(activeSection) && (
+          {!['appearance', 'profile', 'calendar', 'connections', 'data', 'github', 'health', 'capture', 'reminders', 'preferences', 'notifications'].includes(activeSection) && (
             <FadeIn delay={100}>
               <div className="bg-theme-primary rounded-lg border border-gray-800 p-6">
                 <div className="text-center py-12 text-gray-400">
