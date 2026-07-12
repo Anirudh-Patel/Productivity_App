@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAvatarStore } from '../../store/slices/avatarSlice';
 import { AvatarCanvas } from '../../features/avatar/components/AvatarCanvas/AvatarCanvas';
+import { useCharacterSkinStore } from '../../store/characterSkinStore';
 import { Trash2, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 
 interface Equipment {
@@ -47,6 +48,7 @@ const SLOT_NAMES = {
 
 const Equipment = () => {
   const { equipped, inventory, equipItem, unequipItem, loadUserEquipment } = useAvatarStore();
+  const { skins, selectedId, loadManifest, selectSkin } = useCharacterSkinStore();
   const [selectedItem, setSelectedItem] = useState<Equipment | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -54,6 +56,11 @@ const Equipment = () => {
     // Force load equipment to ensure avatar renders with placeholders
     loadUserEquipment(1);
   }, [loadUserEquipment]);
+
+  useEffect(() => {
+    // Load the character skin manifest (tolerates a missing manifest gracefully).
+    loadManifest();
+  }, [loadManifest]);
 
   const handleEquipItem = async (item: Equipment) => {
     try {
@@ -266,6 +273,60 @@ const Equipment = () => {
           </div>
         )}
       </div>
+
+      {/* Character Skin Picker — renders nothing when the manifest is absent/empty */}
+      {skins.length > 0 && (
+        <div className="bg-theme-primary rounded-xl p-6 border border-gray-800" style={{ width: '1024px' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Character Skin</h2>
+            {selectedId && (
+              <button
+                onClick={() => selectSkin(null)}
+                className="flex items-center gap-2 px-3 py-2 bg-theme-bg hover:bg-theme-secondary rounded-lg transition-colors text-sm"
+              >
+                Clear Selection
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-4">
+            {skins.map((skin) => {
+              const isSelected = skin.id === selectedId;
+              return (
+                <button
+                  key={skin.id}
+                  type="button"
+                  onClick={() => selectSkin(skin.id)}
+                  aria-pressed={isSelected}
+                  title={`${skin.displayName} — ${skin.series}`}
+                  className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 bg-theme-bg transition-all hover:brightness-110 ${
+                    isSelected
+                      ? 'border-solo-accent ring-2 ring-solo-accent/60 shadow-lg shadow-solo-accent/20'
+                      : 'border-gray-700 hover:border-gray-500'
+                  }`}
+                >
+                  <img
+                    src={skin.file}
+                    alt={skin.displayName}
+                    width={skin.width * 3}
+                    height={skin.height * 3}
+                    style={{ imageRendering: 'pixelated' }}
+                    className="pointer-events-none"
+                  />
+                  <div className="text-center leading-tight">
+                    <div className="text-xs font-semibold text-gray-200 truncate max-w-[7rem]">
+                      {skin.displayName}
+                    </div>
+                    <div className="text-[10px] text-gray-400 truncate max-w-[7rem]">
+                      {skin.series}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Full Screen Modal */}
       {isExpanded && (

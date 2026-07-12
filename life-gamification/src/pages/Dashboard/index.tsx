@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { Target, TrendingUp, Brain, Zap, BarChart3, User, MapPin, Activity } from 'lucide-react'
 import { useRenderPerformance } from '../../utils/performance'
 import { useGameStore } from '../../store/gameStore'
+import { useCharacterSkinStore } from '../../store/characterSkinStore'
 import { analyzeUserPerformance, generateDifficultyRecommendation } from '../../utils/difficultyAdjustment'
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents'
 import QuickStartWidget from '../../shared/components/ui/QuickStartWidget'
@@ -14,7 +16,18 @@ const Dashboard = () => {
   useRenderPerformance('Dashboard', process.env.NODE_ENV === 'development');
   
   const { user, tasks } = useGameStore();
-  
+
+  // Character skin (display preference) for the dashboard avatar card.
+  const skins = useCharacterSkinStore((s) => s.skins);
+  const selectedId = useCharacterSkinStore((s) => s.selectedId);
+  const loadManifest = useCharacterSkinStore((s) => s.loadManifest);
+  const selectedSkin = selectedId ? skins.find((s) => s.id === selectedId) ?? null : null;
+
+  useEffect(() => {
+    loadManifest();
+  }, [loadManifest]);
+
+
   // Analyze user performance for dynamic difficulty
   const userStats = analyzeUserPerformance(
     user || {} as any,
@@ -33,6 +46,23 @@ const Dashboard = () => {
       <FadeIn>
         <div className="bg-gradient-to-r from-theme-primary via-gray-800 to-theme-primary rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Selected character skin avatar — only shown when a skin is chosen */}
+              {selectedSkin && (
+                <div className="flex flex-col items-center gap-1 rounded-lg border border-gray-700 bg-theme-bg/60 px-3 py-2 shrink-0">
+                  <img
+                    src={selectedSkin.file}
+                    alt={selectedSkin.displayName}
+                    width={selectedSkin.width * 2}
+                    height={selectedSkin.height * 2}
+                    style={{ imageRendering: 'pixelated' }}
+                    className="pointer-events-none"
+                  />
+                  <span className="text-[10px] text-gray-400 max-w-[6rem] truncate">
+                    Lv {user?.level || 1}
+                  </span>
+                </div>
+              )}
             <div>
               <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
                 <User className="w-8 h-8 text-theme-accent" />
@@ -42,6 +72,7 @@ const Dashboard = () => {
                 <MapPin className="w-4 h-4" />
                 Ready to embark on today's epic quests? Level {user?.level || 1} • {user?.gold || 0} Gold
               </p>
+            </div>
             </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-theme-accent">{user?.experience_points || 0} XP</div>
