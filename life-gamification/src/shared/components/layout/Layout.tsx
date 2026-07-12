@@ -7,6 +7,7 @@ import { useGithubSync } from '../../../hooks/useGithubSync'
 import { useHealthSync } from '../../../hooks/useHealthSync'
 import { useCaptureSync } from '../../../hooks/useCaptureSync'
 import { useRemindersSync } from '../../../hooks/useRemindersSync'
+import { useConnectionsSync } from '../../../hooks/useConnectionsSync'
 import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
 import TimerWidget from '../ui/TimerWidget'
 
@@ -28,6 +29,9 @@ const Layout = ({ children }: LayoutProps) => {
   useCaptureSync();
   // Apple Reminders -> quests sync (on start + every 15 min)
   useRemindersSync();
+
+  // Live connections (SimpleFIN bank sync) — on start + every 6 h
+  useConnectionsSync();
 
   // Global keyboard shortcuts. The shortcuts modal manages its own visibility
   // via the 'toggle-keyboard-help' window event.
