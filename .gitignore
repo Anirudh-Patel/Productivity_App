@@ -34,4 +34,7 @@ coverage/
 
 # Temporary files
 tmp/
-temp/
+temp/# Character fan-art assets (personal use; kept out of public repo)
+tools/pixelart/characters/
+tools/pixelart/out/
+life-gamification/public/assets/characters/
