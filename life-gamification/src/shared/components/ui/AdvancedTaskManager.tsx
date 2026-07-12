@@ -3,7 +3,6 @@ import {
   CheckSquare,
   Filter,
   Search,
-  MoreVertical,
   Check,
   Archive,
   Trash2,
@@ -22,7 +21,6 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import type { Task } from '../../../types'
-import { useGameStore } from '../../../store/gameStore'
 import { useTaskPreferences } from '../../../store/preferencesStore'
 import { useToast } from './Toast'
 import { FadeIn, StaggeredList } from './AnimatedComponents'
@@ -63,11 +61,11 @@ const AdvancedTaskManager = ({
   const [showFilters, setShowFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
-  const [selectedDifficulties, setSelectedDifficulties] = useState<Set<string>>(new Set())
+  const [selectedDifficulties, setSelectedDifficulties] = useState<Set<number>>(new Set())
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   
   const toast = useToast()
-  const taskPrefs = useTaskPreferences()
+  useTaskPreferences()
 
   // Smart filters for enhanced task management
   const smartFilters: SmartFilter[] = [
@@ -101,7 +99,7 @@ const AdvancedTaskManager = ({
       description: 'Tasks past due date',
       icon: AlertTriangle,
       color: 'text-red-400',
-      filter: (task) => task.due_date && new Date(task.due_date) < new Date() && task.status === 'active'
+      filter: (task) => !!task.due_date && new Date(task.due_date) < new Date() && task.status === 'active'
     },
     {
       id: 'today',
@@ -197,14 +195,10 @@ const AdvancedTaskManager = ({
           comparison = dateA - dateB
           break
         case 'priority':
-          const priorityOrder = { low: 1, medium: 2, high: 3, urgent: 4 }
-          comparison = (priorityOrder[a.priority as keyof typeof priorityOrder] || 0) - 
-                     (priorityOrder[b.priority as keyof typeof priorityOrder] || 0)
+          comparison = a.priority - b.priority
           break
         case 'difficulty':
-          const difficultyOrder = { easy: 1, medium: 2, hard: 3, expert: 4 }
-          comparison = (difficultyOrder[a.difficulty as keyof typeof difficultyOrder] || 0) - 
-                      (difficultyOrder[b.difficulty as keyof typeof difficultyOrder] || 0)
+          comparison = a.difficulty - b.difficulty
           break
         case 'title':
           comparison = a.title.localeCompare(b.title)

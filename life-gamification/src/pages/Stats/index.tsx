@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Calendar, Award, Target, Zap, Clock } from 'lucide-react';
+import { BarChart3, TrendingUp, Award, Target, Clock } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useRenderPerformance } from '../../utils/performance';
-import { FadeIn, StaggeredList } from '../../shared/components/ui/AnimatedComponents';
+import { FadeIn } from '../../shared/components/ui/AnimatedComponents';
 import { 
   XPProgressChart, 
   TaskCategoryChart, 

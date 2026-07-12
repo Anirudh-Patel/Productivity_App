@@ -20,7 +20,7 @@ interface AudioContextType {
   isLoaded: boolean
 }
 
-interface AudioPlayOptions {
+export interface AudioPlayOptions {
   volume?: number
   loop?: boolean
   pitch?: number
@@ -183,7 +183,7 @@ export const AudioProvider = ({ children }: AudioProviderProps) => {
         load: () => {},
         addEventListener: () => {},
         removeEventListener: () => {}
-      } as HTMLAudioElement
+      } as unknown as HTMLAudioElement
       
       return mockAudio
     } catch (error) {
@@ -276,7 +276,7 @@ export const AudioProvider = ({ children }: AudioProviderProps) => {
             audio = new Audio(soundDef.url)
           } catch (error) {
             // Fallback to procedural sound
-            audio = createProceduralSound(soundId)
+            audio = createProceduralSound(soundId) ?? undefined
           }
           
           if (audio) {

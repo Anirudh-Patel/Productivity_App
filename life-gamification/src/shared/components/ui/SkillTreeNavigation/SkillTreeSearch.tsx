@@ -183,7 +183,7 @@ export const SkillTreeSearch: React.FC<SkillTreeSearchProps> = ({
 
             {/* Results List */}
             <div className="max-h-60 overflow-y-auto">
-              {filteredResults.map(({ node, matchType }, index) => {
+              {filteredResults.map(({ node, matchType }) => {
                 const isAllocated = allocatedNodes.has(node.node_key);
                 const statColor = STAT_COLORS[node.primary_stat];
                 

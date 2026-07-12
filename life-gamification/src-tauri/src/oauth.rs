@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use tauri::Emitter;
-use tokio::sync::oneshot;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OAuthTokens {
@@ -18,18 +15,6 @@ pub struct OAuthConfig {
     pub client_id: String,
     pub redirect_uri: String,
     pub scopes: Vec<String>,
-}
-
-pub struct OAuthState {
-    pub pending_auth: Arc<Mutex<HashMap<String, oneshot::Sender<Result<OAuthTokens, String>>>>>,
-}
-
-impl OAuthState {
-    pub fn new() -> Self {
-        Self {
-            pending_auth: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
 }
 
 #[tauri::command]
@@ -148,7 +133,7 @@ fn extract_tokens_from_request(request: &str) -> Option<OAuthTokens> {
 }
 
 #[tauri::command]
-pub async fn refresh_google_token(refresh_token: String, client_id: String) -> Result<OAuthTokens, String> {
+pub async fn refresh_google_token(_refresh_token: String, _client_id: String) -> Result<OAuthTokens, String> {
     // Implement token refresh logic here
     // This would make a POST request to Google's token endpoint
     Err("Token refresh not yet implemented".to_string())

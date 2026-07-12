@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import {
   Zap,
-  Clock,
   Calendar,
-  Star,
   Repeat,
   Target,
-  Filter,
   TrendingUp,
   Award,
   BookOpen,
@@ -63,12 +60,12 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Daily Workout Session',
         description: 'Complete a 30-minute workout to stay healthy and energized',
         category: 'health',
-        difficulty: 'medium',
-        task_type: 'simple',
+        difficulty: 5,
+        task_type: 'standard',
         base_experience_reward: 50,
         gold_reward: 25,
         tags: ['health', 'fitness', 'daily'],
-        priority: 'medium'
+        priority: 3
       }
     },
     {
@@ -81,12 +78,12 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Reading Session',
         description: 'Read for 30 minutes to expand knowledge and relax',
         category: 'learning',
-        difficulty: 'easy',
-        task_type: 'simple',
+        difficulty: 3,
+        task_type: 'standard',
         base_experience_reward: 30,
         gold_reward: 15,
         tags: ['learning', 'books', 'knowledge'],
-        priority: 'low'
+        priority: 2
       }
     },
     {
@@ -99,12 +96,12 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Coding Practice Session',
         description: 'Practice coding skills for 1 hour',
         category: 'work',
-        difficulty: 'hard',
-        task_type: 'simple',
+        difficulty: 7,
+        task_type: 'standard',
         base_experience_reward: 80,
         gold_reward: 40,
         tags: ['coding', 'practice', 'skills'],
-        priority: 'high'
+        priority: 4
       }
     },
     {
@@ -117,12 +114,12 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Meditation Session',
         description: '15 minutes of mindfulness and relaxation',
         category: 'wellness',
-        difficulty: 'easy',
-        task_type: 'simple',
+        difficulty: 3,
+        task_type: 'standard',
         base_experience_reward: 25,
         gold_reward: 12,
         tags: ['mindfulness', 'wellness', 'meditation'],
-        priority: 'medium'
+        priority: 3
       }
     },
     {
@@ -135,7 +132,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Daily Hydration Goal',
         description: 'Stay hydrated by drinking 8 glasses of water',
         category: 'health',
-        difficulty: 'easy',
+        difficulty: 3,
         task_type: 'goal',
         goal_target: 8,
         goal_unit: 'glasses',
@@ -143,7 +140,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         base_experience_reward: 40,
         gold_reward: 20,
         tags: ['health', 'hydration', 'daily'],
-        priority: 'medium'
+        priority: 3
       }
     },
     {
@@ -156,13 +153,13 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
         title: 'Learning Streak',
         description: 'Maintain daily learning habit',
         category: 'learning',
-        difficulty: 'medium',
+        difficulty: 5,
         task_type: 'recurring',
         recurrence_pattern: 'daily',
         base_experience_reward: 60,
         gold_reward: 30,
         tags: ['learning', 'streak', 'habit'],
-        priority: 'high'
+        priority: 4
       }
     }
   ]
@@ -203,7 +200,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
             title: `Daily Goal ${i}`,
             description: 'Set and achieve your daily goal',
             category: 'personal',
-            difficulty: 'medium',
+            difficulty: 5,
             due_date: today.toISOString(),
             base_experience_reward: 40,
             gold_reward: 20
@@ -225,7 +222,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
           title: 'Pomodoro Focus Session',
           description: '25-minute focused work session',
           category: 'productivity',
-          difficulty: 'medium',
+          difficulty: 5,
           base_experience_reward: 50,
           gold_reward: 25,
           tags: ['pomodoro', 'focus', 'productivity']
@@ -246,7 +243,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
           title: 'New Daily Habit',
           description: 'Build a new positive habit',
           category: 'personal',
-          difficulty: 'easy',
+          difficulty: 3,
           task_type: 'recurring',
           recurrence_pattern: 'daily',
           base_experience_reward: 35,
@@ -272,7 +269,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
           title: 'Weekly Skill Challenge',
           description: 'Dedicated time to improve a specific skill',
           category: 'learning',
-          difficulty: 'hard',
+          difficulty: 7,
           due_date: nextWeek.toISOString(),
           base_experience_reward: 100,
           gold_reward: 50,
@@ -294,7 +291,7 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
           title: 'Quick Win Task',
           description: 'A simple 5-minute task for instant satisfaction',
           category: 'personal',
-          difficulty: 'easy',
+          difficulty: 3,
           base_experience_reward: 20,
           gold_reward: 10,
           tags: ['quick', 'easy', 'win']
@@ -309,8 +306,8 @@ const TaskQuickActions = ({ onQuickCreate, className = '' }: TaskQuickActionsPro
   const stats = {
     totalTasks: tasks.active.length + tasks.completed.length,
     completedTasks: tasks.completed.length,
-    activeStreak: user?.current_streak || 0,
-    totalXP: user?.experience || 0
+    activeStreak: 0,
+    totalXP: user?.experience_points || 0
   }
 
   const completionRate = stats.totalTasks > 0 ? 

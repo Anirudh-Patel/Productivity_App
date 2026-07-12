@@ -100,10 +100,8 @@ const QuickStartWidget = () => {
         description: template.description,
         category: template.category,
         difficulty: finalDifficulty,
-        base_experience_reward: template.xpReward,
-        estimated_time: template.estimatedTime,
-        task_type: 'simple' as const,
-        priority: 'medium' as const
+        task_type: 'standard' as const,
+        priority: 3
       });
 
       toast.success(

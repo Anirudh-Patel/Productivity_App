@@ -267,8 +267,6 @@ export interface SkillTreeState {
   setEditMode: (enabled: boolean) => void;
   updateNodePosition: (nodeKey: string, x: number, y: number) => Promise<void>;
   updateNodePositionLocal: (nodeKey: string, x: number, y: number) => void;
-  markNodeForDeletion: (nodeKey: string) => void;
-  unmarkNodeForDeletion: (nodeKey: string) => void;
   savePendingChanges: () => Promise<void>;
   discardPendingChanges: () => void;
   

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Play, Lock, CheckCircle, BookOpen, Users, Crown } from 'lucide-react';
+import { Play, Lock, CheckCircle, BookOpen, Crown } from 'lucide-react';
 import { QuestChain, QuestTemplate } from '../../../types';
 import { questChains, chainQuestTemplates, getAvailableChains, generateChainQuestData } from '../../../data/questChains';
-import { useGameStore } from '../../../store/gameStore';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { FadeIn, StaggeredList } from './AnimatedComponents';
+import { StaggeredList } from './AnimatedComponents';
 import { useRenderPerformance } from '../../../utils/performance';
 
 interface QuestChainsProps {
@@ -15,7 +14,7 @@ interface QuestChainsProps {
 export const QuestChains = ({ userLevel, onStartChainQuest }: QuestChainsProps) => {
   useRenderPerformance('QuestChains', process.env.NODE_ENV === 'development');
   
-  const { currentTheme } = useTheme();
+  useTheme();
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
   const availableChains = getAvailableChains(userLevel);
   const lockedChains = Object.values(questChains).filter(

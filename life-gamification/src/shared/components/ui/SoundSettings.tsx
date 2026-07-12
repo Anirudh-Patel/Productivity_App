@@ -294,6 +294,9 @@ const SoundSettings = ({ className = '' }: SoundSettingsProps) => {
                     id: 1, 
                     name: 'Test Achievement', 
                     description: 'Test description',
+                    icon: '🏆',
+                    requirements_type: 'task_count',
+                    requirements_value: 1,
                     rarity: 'epic' as const,
                     experience_reward: 100,
                     gold_reward: 50

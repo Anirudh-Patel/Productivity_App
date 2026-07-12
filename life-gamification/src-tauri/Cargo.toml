@@ -30,4 +30,6 @@ uuid = { version = "1.0", features = ["v4"] }
 urlencoding = "2.1"
 csv = "1"
 tokio = { version = "1", features = ["time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+open = "5"
 

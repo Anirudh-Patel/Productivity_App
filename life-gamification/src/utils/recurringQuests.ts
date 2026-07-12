@@ -1,7 +1,27 @@
 import { RecurrencePattern, Task } from '../types';
 import { addDays, addWeeks, addMonths, format, isSameDay, isAfter } from 'date-fns';
 
-export const calculateNextDueDate = (pattern: RecurrencePattern, lastCompletedDate?: Date): Date => {
+/**
+ * Normalize a recurrence pattern that may arrive as a JSON string from the
+ * backend (tasks.recurrence_pattern is stored as TEXT) or as a legacy
+ * shorthand string like 'daily'.
+ */
+export const toRecurrencePattern = (pattern: string | RecurrencePattern): RecurrencePattern => {
+  if (typeof pattern !== 'string') return pattern;
+  try {
+    const parsed = JSON.parse(pattern);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as RecurrencePattern;
+    }
+  } catch {
+    // Not JSON — fall through to shorthand handling
+  }
+  const frequency = (['daily', 'weekly', 'monthly'].includes(pattern) ? pattern : 'custom') as RecurrencePattern['frequency'];
+  return { frequency, interval: 1 };
+};
+
+export const calculateNextDueDate = (rawPattern: string | RecurrencePattern, lastCompletedDate?: Date): Date => {
+  const pattern = toRecurrencePattern(rawPattern);
   const baseDate = lastCompletedDate || new Date();
   
   switch (pattern.frequency) {
@@ -55,7 +75,8 @@ export const calculateStreakBonus = (currentStreak: number): number => {
   return 30; // Max bonus for 30+ day streaks
 };
 
-export const getRecurringQuestIcon = (pattern: RecurrencePattern): string => {
+export const getRecurringQuestIcon = (rawPattern: string | RecurrencePattern): string => {
+  const pattern = toRecurrencePattern(rawPattern);
   switch (pattern.frequency) {
     case 'daily': return '📅';
     case 'weekly': return '📄';
@@ -65,7 +86,8 @@ export const getRecurringQuestIcon = (pattern: RecurrencePattern): string => {
   }
 };
 
-export const formatRecurrencePattern = (pattern: RecurrencePattern): string => {
+export const formatRecurrencePattern = (rawPattern: string | RecurrencePattern): string => {
+  const pattern = toRecurrencePattern(rawPattern);
   switch (pattern.frequency) {
     case 'daily':
       return pattern.interval === 1 ? 'Every day' : `Every ${pattern.interval} days`;
@@ -131,6 +153,6 @@ export const renewRecurringQuest = (task: Task): Task => {
     next_due_date: format(nextDueDate, 'yyyy-MM-dd'),
     completed_at: undefined,
     // Reset goal progress if it's a goal-based recurring quest
-    goal_current: task.task_type === 'goal' ? 0 : task.goal_current,
+    goal_current: task.goal_current,
   };
 };

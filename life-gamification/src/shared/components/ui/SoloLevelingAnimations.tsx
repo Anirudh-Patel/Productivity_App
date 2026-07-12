@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { useGameStore } from '../../../store/gameStore';
 
 // Solo Leveling style level up animation
 export const SoloLevelUpAnimation: React.FC<{ 

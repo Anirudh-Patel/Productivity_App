@@ -63,7 +63,7 @@ const Tasks = () => {
       key: 'n',
       action: () => setIsModalOpen(true),
       description: 'Create new quest',
-      category: 'Actions'
+      category: 'tasks'
     },
     {
       key: 'Escape',
@@ -72,7 +72,7 @@ const Tasks = () => {
         setProgressModal({ isOpen: false, task: null });
       },
       description: 'Close modals',
-      category: 'Interface'
+      category: 'ui'
     }
   ]);
 
@@ -145,8 +145,22 @@ const Tasks = () => {
 
   // Handle quick task creation from templates
   const handleQuickTaskCreate = async (taskTemplate: Partial<Task>) => {
+    if (!taskTemplate.title) {
+      toast.error('Failed to create task', 'Task template is missing a title');
+      return;
+    }
     try {
-      await createTask(taskTemplate);
+      await createTask({
+        title: taskTemplate.title,
+        description: taskTemplate.description ?? undefined,
+        category: taskTemplate.category,
+        difficulty: taskTemplate.difficulty,
+        due_date: taskTemplate.due_date ?? undefined,
+        priority: taskTemplate.priority,
+        task_type: taskTemplate.task_type,
+        goal_target: taskTemplate.goal_target ?? undefined,
+        goal_unit: taskTemplate.goal_unit ?? undefined
+      });
       toast.success('Task created!', 'Your new task has been added to your quest list');
     } catch (error: any) {
       toast.error('Failed to create task', error.userMessage || 'Please try again');

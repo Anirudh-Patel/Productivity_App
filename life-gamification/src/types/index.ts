@@ -54,32 +54,39 @@ export interface User {
   max_health: number;
   gold: number;
   theme_preference: string;
-  active_title?: string;
+  equipped_title?: string | null;
 }
 
 export interface Task {
   id: number;
   user_id: number;
   title: string;
-  description?: string;
+  description?: string | null;
   category: string;
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  /** Integer 1-10 (see DIFFICULTY_LEVELS) — matches the SQLite schema */
+  difficulty: number;
   base_experience_reward: number;
   gold_reward: number;
-  due_date?: string;
+  due_date?: string | null;
   status: 'active' | 'completed' | 'failed' | 'archived';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  /** Integer 1-5 — matches the SQLite schema */
+  priority: number;
   created_at: string;
-  completed_at?: string;
-  task_type: 'simple' | 'goal' | 'recurring';
-  goal_target?: number;
-  goal_current?: number;
-  goal_unit?: string;
+  completed_at?: string | null;
+  task_type: 'standard' | 'goal' | 'recurring';
+  goal_target?: number | null;
+  goal_current?: number | null;
+  goal_unit?: string | null;
   tags?: string[];
   // Recurring quest fields
-  recurrence_pattern?: string | RecurrencePattern;
+  recurrence_pattern?: string | RecurrencePattern | null;
+  parent_recurring_task_id?: number | null;
+  instance_date?: string | null;
   next_due_date?: string;
-  current_streak?: number;
+  current_streak?: number | null;
+  longest_streak?: number | null;
+  last_completed_date?: string | null;
+  streak_bonus_multiplier?: number | null;
   best_streak?: number;
   total_completions?: number;
   // Quest chain fields
@@ -89,7 +96,7 @@ export interface Task {
   // Additional properties for advanced task management
   experience?: number; // Legacy support
   // Project grouping
-  project_id?: number;
+  project_id?: number | null;
   // Time tracking
   estimated_time_minutes?: number;
   total_time_spent_seconds?: number;

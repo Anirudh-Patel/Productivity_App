@@ -16,7 +16,6 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const navigate = useNavigate();
 
   // GitHub issues -> tasks sync (on start + every 30 min)
@@ -30,11 +29,12 @@ const Layout = ({ children }: LayoutProps) => {
   // Apple Reminders -> quests sync (on start + every 15 min)
   useRemindersSync();
 
-  // Global keyboard shortcuts
-  const shortcuts = useGlobalShortcuts({
+  // Global keyboard shortcuts. The shortcuts modal manages its own visibility
+  // via the 'toggle-keyboard-help' window event.
+  useGlobalShortcuts({
     openNewQuest: () => navigate('/tasks?new=true'),
     toggleSidebar: () => setSidebarCollapsed(!sidebarCollapsed),
-    openHelp: () => setShowShortcuts(true)
+    openHelp: () => window.dispatchEvent(new CustomEvent('toggle-keyboard-help'))
   });
 
   return (
@@ -49,11 +49,7 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
       </div>
       
-      <KeyboardShortcutsModal
-        isOpen={showShortcuts}
-        onClose={() => setShowShortcuts(false)}
-        shortcuts={shortcuts}
-      />
+      <KeyboardShortcutsModal />
 
       <TimerWidget />
     </>

@@ -198,16 +198,23 @@ class RewardSystem {
           await invoke('add_gold', { userId, amount: reward.amount });
           break;
         case 'item':
-          await invoke('add_item_to_inventory', { userId, itemId: reward.itemId });
+          await invoke('add_item_to_inventory', {
+            userId,
+            itemId: reward.itemId ?? null,
+            name: reward.name,
+            description: reward.description,
+            rarity: reward.rarity,
+            icon: reward.icon ?? null
+          });
           break;
         case 'manhwa_page':
         case 'character_skin':
         case 'secret_chapter':
           // These would unlock content in the app
-          await invoke('unlock_content', { userId, contentType: reward.type, contentId: reward.id });
+          await invoke('unlock_content', { userId, contentType: reward.type, contentId: reward.id, name: reward.name });
           break;
         case 'title':
-          await invoke('unlock_title', { userId, titleId: reward.id });
+          await invoke('unlock_title', { userId, titleId: reward.id, title: reward.name, rarity: reward.rarity });
           break;
       }
     } catch (error) {

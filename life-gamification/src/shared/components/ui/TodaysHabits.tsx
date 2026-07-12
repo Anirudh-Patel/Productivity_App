@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Flame, CheckCircle2, Circle, Calendar } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task } from '../../../types';
 
 interface TodaysHabitsProps {
   onTaskCompleted?: () => void;
@@ -13,11 +12,10 @@ export const TodaysHabits = ({ onTaskCompleted }: TodaysHabitsProps) => {
   const [loading, setLoading] = useState(false);
   const [generatingInstances, setGeneratingInstances] = useState(false);
 
-  // Filter for today's recurring task instances
-  const todaysHabits = tasks.filter(
+  // Filter for today's recurring task instances (active and completed)
+  const todaysHabits = [...tasks.active, ...tasks.completed].filter(
     (task) =>
-      task.status === 'active' &&
-      task.parent_recurring_task_id !== null &&
+      task.parent_recurring_task_id != null &&
       task.instance_date === new Date().toISOString().split('T')[0]
   );
 

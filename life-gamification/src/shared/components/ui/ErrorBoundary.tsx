@@ -1,6 +1,6 @@
 import { Component, ReactNode, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { ErrorHandler, ErrorType } from '../../../utils/errorHandler';
+import { ErrorHandler } from '../../../utils/errorHandler';
 import { logger } from '../../../utils/logger';
 
 interface Props {

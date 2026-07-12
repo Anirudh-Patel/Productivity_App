@@ -7,7 +7,6 @@ import type {
   CreateTaskRequest,
   UserAchievement,
   Achievement,
-  Streak,
   InventoryItem,
   Project,
   CreateProjectRequest,
@@ -25,7 +24,7 @@ import { withErrorHandling } from '../utils/errorHandler';
 import { PerformanceMonitor } from '../utils/performance';
 import { notificationService } from '../services/notificationService';
 import { rewardSystem, rollReward, type Reward } from '../services/rewardService';
-import { smartNotificationScheduler, scheduleTaskReminder } from '../services/smartNotificationScheduler';
+import { scheduleTaskReminder } from '../services/smartNotificationScheduler';
 
 export const useGameStore = create<GameState>((set, get) => ({
   user: null,
@@ -75,7 +74,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const startTime = Date.now();
     
     const result = await withErrorHandling(
-      () => invoke('get_user'),
+      () => invoke<User>('get_user'),
       { component: 'GameStore', action: 'fetchUser' }
     );
     
@@ -439,7 +438,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     try {
       const items: InventoryItem[] = await invoke('get_user_inventory');
       
-      set(state => ({
+      set(() => ({
         inventory: { 
           items,
           loading: false 
@@ -533,7 +532,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     try {
       const buffs: import('../types').Buff[] = await invoke('get_active_buffs');
       
-      set(state => ({
+      set(() => ({
         buffs: { 
           active: buffs,
           loading: false

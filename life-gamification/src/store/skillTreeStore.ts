@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { 
   SkillNode, 
@@ -386,7 +385,7 @@ export const useSkillTreeStore = create<SkillTreeState>((set, get) => ({
     }
 
     // Revert nodes back to their original positions by reloading
-    set(state => ({ 
+    set(() => ({ 
       pendingChanges: new Map(),
       // Note: We could reload the skill tree here, but for performance
       // we'll just clear pending changes. The positions will revert

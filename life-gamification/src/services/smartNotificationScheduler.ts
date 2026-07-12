@@ -36,7 +36,7 @@ class SmartNotificationScheduler {
   async analyzeUserPatterns(userId: number): Promise<UserProductivityPattern> {
     try {
       // Get user's task completion history
-      const completionHistory = await invoke('get_user_task_history', { userId });
+      const completionHistory = await invoke<Array<{ completed_at: string }>>('get_user_task_history', { userId });
       
       const pattern: UserProductivityPattern = {
         userId,

@@ -25,7 +25,7 @@ export const useKeyboardShortcuts = (customShortcuts: KeyboardShortcut[] = [], o
   const { enabled = true, showNotifications = false } = options;
   const navigate = useNavigate();
   const toast = useToast();
-  const { createTask, completeTask, tasks, fetchTasks, fetchUser } = useGameStore();
+  const { completeTask, tasks, fetchTasks, fetchUser } = useGameStore();
   const [shortcutsEnabled, setShortcutsEnabled] = useState(enabled);
   const lastTriggeredRef = useRef<number>(0);
 
@@ -256,7 +256,7 @@ export const useKeyboardShortcuts = (customShortcuts: KeyboardShortcut[] = [], o
     },
     {
       key: 'F5',
-      action: (e) => {
+      action: () => {
         // Allow default F5 behavior but show notification
         showNotifications && toast.info('Page Refresh', 'Refreshing application...');
       },

@@ -143,7 +143,7 @@ export class NodeInteractionManager {
 
   // Calculate visual feedback intensity based on interaction state
   getInteractionIntensity(
-    node: SkillNode,
+    _node: SkillNode,
     isHovered: boolean,
     isPressed: boolean,
     isAllocated: boolean

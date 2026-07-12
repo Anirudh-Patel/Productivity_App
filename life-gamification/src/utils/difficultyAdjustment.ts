@@ -15,7 +15,7 @@ export interface DifficultyRecommendation {
 
 // Analyze user's performance patterns
 export const analyzeUserPerformance = (
-  user: User,
+  _user: User,
   completedTasks: Task[],
   failedTasks: Task[] = []
 ): DifficultyStats => {
@@ -204,7 +204,7 @@ export const suggestOptimalCategories = (
 // Auto-adjust task difficulty when creating new tasks
 export const autoAdjustTaskDifficulty = (
   initialDifficulty: number,
-  category: string,
+  _category: string,
   userStats: DifficultyStats,
   userLevel: number
 ): { adjustedDifficulty: number; adjustmentReason: string } => {
