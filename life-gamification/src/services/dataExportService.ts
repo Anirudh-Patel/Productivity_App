@@ -124,14 +124,14 @@ class DataExportService {
       tasks: {
         active: options.includeTasks ? gameState.tasks.active : [],
         completed: options.includeTasks ? gameState.tasks.completed : [],
-        failed: options.includeTasks ? gameState.tasks.failed : []
+        failed: []
       },
-      achievements: options.includeAchievements ? gameState.achievements : [],
-      inventory: options.includeInventory ? gameState.inventory : [],
-      equipment: options.includeEquipment ? gameState.equipment : [],
+      achievements: options.includeAchievements ? gameState.achievements.unlocked : [],
+      inventory: options.includeInventory ? gameState.inventory.items : [],
+      equipment: [],
       calendar: {
-        events: options.includeCalendar ? calendarState.events : [],
-        settings: options.includeCalendar ? calendarState.settings : {}
+        events: options.includeCalendar ? calendarState.syncedCalendars : [],
+        settings: options.includeCalendar ? { importRules: calendarState.importRules } : {}
       },
       settings: options.includeSettings ? this.gatherAppSettings() : {},
       exportMetadata: {
@@ -326,7 +326,7 @@ class DataExportService {
   /**
    * Convert array of objects to CSV format
    */
-  private objectToCSV(objects: any[], type: string): string {
+  private objectToCSV(objects: any[], _type: string): string {
     if (objects.length === 0) return '';
 
     // Get all unique keys from all objects
@@ -421,10 +421,8 @@ class DataExportService {
   /**
    * Parse CSV import data (simplified implementation)
    */
-  private parseCSV(content: string): ExportData {
+  private parseCSV(_content: string): ExportData {
     // This is a simplified CSV parser - in production, you'd want a more robust solution
-    const lines = content.split('\n').filter(line => line.trim());
-    
     // For now, return basic structure - full CSV parsing would be more complex
     return {
       user: null,
@@ -446,7 +444,7 @@ class DataExportService {
   /**
    * Parse XML import data (simplified implementation)
    */
-  private parseXML(content: string): ExportData {
+  private parseXML(_content: string): ExportData {
     // This is a simplified XML parser - in production, you'd want a proper XML parser
     // For now, return basic structure
     return {
@@ -491,9 +489,6 @@ class DataExportService {
     };
 
     try {
-      const gameStore = useGameStore.getState();
-      const calendarStore = useCalendarStore.getState();
-
       // Import user data
       if (data.user) {
         // Note: In a real implementation, you'd want to be careful about overwriting user data

@@ -324,6 +324,9 @@ export const EffectsTestPanel = () => {
       id: 999,
       name: 'Task Master',
       description: 'Complete 100 tasks in a single day',
+      icon: '🏆',
+      requirements_type: 'task_count',
+      requirements_value: 100,
       rarity: 'legendary',
       experience_reward: 500,
       gold_reward: 250

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle2, Plus, ExternalLink, Zap } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { useCalendarStore } from '../../../store/calendarStore';

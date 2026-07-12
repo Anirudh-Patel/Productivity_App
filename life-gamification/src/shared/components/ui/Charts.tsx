@@ -13,8 +13,8 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { format, subDays, startOfDay, isAfter, isBefore, parseISO } from 'date-fns';
-import type { Task, User } from '../../types';
+import { format, subDays, startOfDay, parseISO } from 'date-fns';
+import type { Task, User } from '../../../types';
 
 interface XPProgressChartProps {
   tasks: Task[];
@@ -24,12 +24,10 @@ interface XPProgressChartProps {
 
 export const XPProgressChart: React.FC<XPProgressChartProps> = ({ 
   tasks, 
-  user, 
   days = 7 
 }) => {
   const chartData = useMemo(() => {
     const today = startOfDay(new Date());
-    const startDate = subDays(today, days - 1);
     
     // Create array of dates
     const dateRange = Array.from({ length: days }, (_, i) => {
@@ -85,7 +83,7 @@ export const XPProgressChart: React.FC<XPProgressChartProps> = ({
               borderRadius: '8px',
             }}
             labelStyle={{ color: '#F3F4F6' }}
-            formatter={(value: number, name: string) => [
+            formatter={(value: number) => [
               <span style={{ color: '#10B981' }}>{value} XP</span>,
               'XP Gained'
             ]}
@@ -171,7 +169,7 @@ export const TaskCategoryChart: React.FC<TaskCategoryChartProps> = ({ tasks }) =
               ]}
             />
             <Bar dataKey="count" name="count">
-              {chartData.map((entry, index) => (
+              {chartData.map((_entry, index) => (
                 <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
               ))}
             </Bar>
@@ -231,11 +229,11 @@ export const DifficultyDistributionChart: React.FC<DifficultyDistributionChartPr
                 cy="50%"
                 outerRadius={80}
                 label={({ difficulty, percent }) => 
-                  `${difficulty} (${(percent * 100).toFixed(0)}%)`
+                  `${difficulty} (${((percent ?? 0) * 100).toFixed(0)}%)`
                 }
                 labelLine={false}
               >
-                {chartData.map((entry, index) => (
+                {chartData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
@@ -269,7 +267,6 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({
 }) => {
   const heatmapData = useMemo(() => {
     const today = new Date();
-    const startDate = subDays(today, days - 1);
     
     // Create grid of days
     const weeks: Array<Array<{ date: Date; activity: number; dateStr: string }>> = [];

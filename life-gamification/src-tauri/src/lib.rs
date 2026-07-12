@@ -20,6 +20,8 @@ use commands::reminders;
 mod database;
 use database::DbConnection;
 
+mod oauth;
+
 
 // Skill Tree Structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3158,6 +3160,295 @@ async fn get_backup_info(backup_path: String) -> Result<serde_json::Value, Strin
     }
 }
 
+// ==================== Task Detail & Statistics Commands ====================
+
+const TASK_SELECT: &str = "SELECT t.id, t.user_id, t.title, t.description, t.category, t.difficulty,
+     t.base_experience_reward, t.gold_reward, t.due_date, t.status, t.priority,
+     COALESCE(t.task_type, 'standard') as task_type,
+     tp.target_progress as goal_target, tp.current_progress as goal_current,
+     t.recurrence_pattern, t.parent_recurring_task_id, t.instance_date,
+     t.current_streak, t.longest_streak, t.last_completed_date, t.streak_bonus_multiplier,
+     t.project_id
+     FROM tasks t
+     LEFT JOIN task_progress tp ON t.id = tp.task_id";
+
+fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
+    Ok(Task {
+        id: row.get::<_, i64>(0)?,
+        user_id: row.get::<_, i64>(1)?,
+        title: row.get(2)?,
+        description: row.get(3)?,
+        category: row.get(4)?,
+        difficulty: row.get::<_, i64>(5)?,
+        base_experience_reward: row.get::<_, i64>(6)?,
+        gold_reward: row.get::<_, i64>(7)?,
+        due_date: row.get(8)?,
+        status: row.get(9)?,
+        priority: row.get::<_, i64>(10)?,
+        created_at: "".to_string(),
+        completed_at: None,
+        task_type: row.get(11)?,
+        goal_target: row.get::<_, Option<i64>>(12)?,
+        goal_current: row.get::<_, Option<i64>>(13)?,
+        goal_unit: None,
+        recurrence_pattern: row.get(14)?,
+        parent_recurring_task_id: row.get::<_, Option<i64>>(15)?,
+        instance_date: row.get(16)?,
+        current_streak: row.get::<_, Option<i64>>(17)?,
+        longest_streak: row.get::<_, Option<i64>>(18)?,
+        last_completed_date: row.get(19)?,
+        streak_bonus_multiplier: row.get(20)?,
+        project_id: row.get::<_, Option<i64>>(21)?,
+    })
+}
+
+#[tauri::command]
+async fn get_task_by_id(db: tauri::State<'_, DbConnection>, task_id: i64) -> Result<Task, String> {
+    let conn = db.lock().await;
+    let query = format!("{} WHERE t.id = ?1", TASK_SELECT);
+    conn.query_row(&query, rusqlite::params![task_id], |row| task_from_row(row))
+        .map_err(|e| format!("Failed to get task {}: {}", task_id, e))
+}
+
+#[tauri::command]
+async fn get_task_statistics(db: tauri::State<'_, DbConnection>) -> Result<serde_json::Value, String> {
+    let conn = db.lock().await;
+
+    let count = |sql: &str| -> Result<i64, String> {
+        conn.query_row(sql, [], |row| row.get::<_, i64>(0))
+            .map_err(|e| format!("Failed to compute task statistics: {}", e))
+    };
+
+    let total = count("SELECT COUNT(*) FROM tasks WHERE user_id = 1")?;
+    let active = count("SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'active'")?;
+    let completed = count("SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'")?;
+    let failed = count("SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'failed'")?;
+    let completed_today = count(
+        "SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'
+         AND date(completed_at) = date('now', 'localtime')",
+    )?;
+    let completed_this_week = count(
+        "SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'
+         AND completed_at >= datetime('now', '-7 days')",
+    )?;
+
+    // Completed counts grouped by category
+    let mut by_category = serde_json::Map::new();
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT category, COUNT(*) FROM tasks
+                 WHERE user_id = 1 AND status = 'completed' GROUP BY category",
+            )
+            .map_err(|e| format!("Failed to prepare category statistics: {}", e))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(|e| format!("Failed to query category statistics: {}", e))?;
+        for row in rows {
+            let (category, cnt) = row.map_err(|e| format!("Failed to read category row: {}", e))?;
+            by_category.insert(category, serde_json::json!(cnt));
+        }
+    }
+
+    let finished = completed + failed;
+    let completion_rate = if finished > 0 {
+        completed as f64 / finished as f64
+    } else {
+        0.0
+    };
+
+    Ok(serde_json::json!({
+        "total": total,
+        "active": active,
+        "completed": completed,
+        "failed": failed,
+        "completed_today": completed_today,
+        "completed_this_week": completed_this_week,
+        "completion_rate": completion_rate,
+        "by_category": by_category,
+    }))
+}
+
+#[tauri::command]
+async fn get_user_detailed_stats(db: tauri::State<'_, DbConnection>) -> Result<serde_json::Value, String> {
+    let conn = db.lock().await;
+    let user = fetch_user_sync(&conn)?;
+
+    let count = |sql: &str| -> Result<i64, String> {
+        conn.query_row(sql, [], |row| row.get::<_, i64>(0))
+            .map_err(|e| format!("Failed to compute user statistics: {}", e))
+    };
+
+    let total_tasks_completed =
+        count("SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'")?;
+    let tasks_completed_today = count(
+        "SELECT COUNT(*) FROM tasks WHERE user_id = 1 AND status = 'completed'
+         AND date(completed_at) = date('now', 'localtime')",
+    )?;
+    let total_xp_from_tasks = count(
+        "SELECT COALESCE(SUM(base_experience_reward), 0) FROM tasks
+         WHERE user_id = 1 AND status = 'completed'",
+    )?;
+    let achievements_unlocked =
+        count("SELECT COUNT(*) FROM user_achievements WHERE user_id = 1")?;
+    let (current_streak, longest_streak) = conn
+        .query_row(
+            "SELECT COALESCE(current_count, 0), COALESCE(longest_count, 0)
+             FROM streaks WHERE user_id = 1 AND streak_type = 'daily_tasks'",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read streaks: {}", e))?
+        .unwrap_or((0, 0));
+
+    Ok(serde_json::json!({
+        "user": user,
+        "total_tasks_completed": total_tasks_completed,
+        "tasks_completed_today": tasks_completed_today,
+        "total_xp_from_tasks": total_xp_from_tasks,
+        "achievements_unlocked": achievements_unlocked,
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+    }))
+}
+
+#[tauri::command]
+async fn get_user_task_history(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let conn = db.lock().await;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, category, difficulty, completed_at FROM tasks
+             WHERE user_id = ?1 AND status = 'completed' AND completed_at IS NOT NULL
+             ORDER BY completed_at DESC LIMIT 1000",
+        )
+        .map_err(|e| format!("Failed to prepare task history query: {}", e))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "title": row.get::<_, String>(1)?,
+                "category": row.get::<_, String>(2)?,
+                "difficulty": row.get::<_, i64>(3)?,
+                "completed_at": row.get::<_, String>(4)?,
+            }))
+        })
+        .map_err(|e| format!("Failed to query task history: {}", e))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect task history: {}", e))
+}
+
+// ==================== Reward Commands ====================
+
+#[tauri::command]
+async fn add_experience(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+    amount: i64,
+) -> Result<User, String> {
+    let conn = db.lock().await;
+    conn.execute(
+        "UPDATE users SET experience_points = experience_points + ?1 WHERE id = ?2",
+        rusqlite::params![amount, user_id],
+    )
+    .map_err(|e| format!("Failed to add experience: {}", e))?;
+    fetch_user_sync(&conn)
+}
+
+#[tauri::command]
+async fn add_gold(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+    amount: i64,
+) -> Result<User, String> {
+    let conn = db.lock().await;
+    conn.execute(
+        "UPDATE users SET gold = gold + ?1 WHERE id = ?2",
+        rusqlite::params![amount, user_id],
+    )
+    .map_err(|e| format!("Failed to add gold: {}", e))?;
+    fetch_user_sync(&conn)
+}
+
+#[tauri::command]
+async fn add_item_to_inventory(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+    item_id: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    rarity: Option<String>,
+    icon: Option<String>,
+) -> Result<(), String> {
+    let conn = db.lock().await;
+    let name = name.or(item_id).unwrap_or_else(|| "Mystery Item".to_string());
+    let rarity = rarity.unwrap_or_else(|| "common".to_string());
+
+    // Stack onto an existing item with the same name if present
+    let updated = conn
+        .execute(
+            "UPDATE inventory_items SET quantity = quantity + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = ?1 AND name = ?2",
+            rusqlite::params![user_id, name],
+        )
+        .map_err(|e| format!("Failed to update inventory: {}", e))?;
+
+    if updated == 0 {
+        conn.execute(
+            "INSERT INTO inventory_items (user_id, name, description, item_type, rarity, quantity, icon)
+             VALUES (?1, ?2, ?3, 'consumable', ?4, 1, ?5)",
+            rusqlite::params![user_id, name, description, rarity, icon],
+        )
+        .map_err(|e| format!("Failed to add item to inventory: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn unlock_content(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+    content_type: String,
+    content_id: String,
+    name: Option<String>,
+) -> Result<(), String> {
+    let conn = db.lock().await;
+    conn.execute(
+        "INSERT OR IGNORE INTO unlocked_content (user_id, content_type, content_id, name)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![user_id, content_type, content_id, name],
+    )
+    .map_err(|e| format!("Failed to unlock content: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn unlock_title(
+    db: tauri::State<'_, DbConnection>,
+    user_id: i64,
+    title_id: Option<String>,
+    title: Option<String>,
+    rarity: Option<String>,
+) -> Result<(), String> {
+    let conn = db.lock().await;
+    let title = title.or(title_id).ok_or("No title provided")?;
+    let rarity = rarity.unwrap_or_else(|| "common".to_string());
+    conn.execute(
+        "INSERT OR IGNORE INTO user_titles (user_id, title, rarity) VALUES (?1, ?2, ?3)",
+        rusqlite::params![user_id, title, rarity],
+    )
+    .map_err(|e| format!("Failed to unlock title: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3298,7 +3589,22 @@ pub fn run() {
             reminders::set_reminder_list_rule,
             reminders::get_reminders_settings,
             reminders::mark_reminder_completed,
-            reminders::sync_reminders
+            reminders::sync_reminders,
+            get_task_by_id,
+            get_task_statistics,
+            get_user_detailed_stats,
+            get_user_task_history,
+            add_experience,
+            add_gold,
+            add_item_to_inventory,
+            unlock_content,
+            unlock_title,
+            oauth::start_google_oauth,
+            oauth::refresh_google_token,
+            oauth::get_google_calendar_events,
+            oauth::create_google_calendar_event,
+            oauth::update_google_calendar_event,
+            oauth::delete_google_calendar_event
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -134,7 +134,7 @@ const Sidebar = ({ collapsed = false }: SidebarProps) => {
                 <div className="text-center mb-4">
                   <p className="text-xs text-gray-500">Title</p>
                   <p className="text-sm font-semibold text-purple-400">
-                    {user?.active_title || 'No Title Equipped'}
+                    {user?.equipped_title || 'No Title Equipped'}
                   </p>
                 </div>
                 

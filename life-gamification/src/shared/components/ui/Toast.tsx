@@ -1,5 +1,5 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
-import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Trophy, Star, Zap, TrendingUp, Gift, Crown, Award } from 'lucide-react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Zap, TrendingUp, Gift, Award } from 'lucide-react';
 
 export interface Toast {
   id: string;

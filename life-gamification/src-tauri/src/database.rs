@@ -121,6 +121,7 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), String> {
         ("011_finance.sql", include_str!("../migrations/011_finance.sql")),
         ("014_capture.sql", include_str!("../migrations/014_capture.sql")),
         ("013_reminders.sql", include_str!("../migrations/013_reminders.sql")),
+        ("015_unlocked_content.sql", include_str!("../migrations/015_unlocked_content.sql")),
     ];
 
     for (filename, sql) in migrations {

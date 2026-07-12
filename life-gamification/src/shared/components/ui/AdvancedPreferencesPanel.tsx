@@ -13,7 +13,6 @@ import {
   Download,
   Upload,
   RotateCcw,
-  Save,
   Volume2
 } from 'lucide-react'
 import { usePreferencesStore } from '../../../store/preferencesStore'

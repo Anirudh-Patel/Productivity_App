@@ -88,7 +88,7 @@ async function authenticateDesktop(): Promise<void> {
         reject(new Error('OAuth authentication timed out'));
       }, 120000); // 2 minute timeout
 
-      const unsubscribe = listen<OAuthTokens>('oauth-success', async (event) => {
+      const unsubscribe = listen<OAuthTokens>('oauth-success', async () => {
         clearTimeout(timeout);
         (await unsubscribe)();
         resolve();
@@ -349,7 +349,7 @@ export const getGoogleCalendarClient = async () => {
     // Return a proxy object for desktop that uses Tauri commands
     return {
       events: {
-        list: async (params: any) => {
+        list: async (_params: any) => {
           const eventsJson = await invoke<string>('get_google_calendar_events', {
             accessToken
           });

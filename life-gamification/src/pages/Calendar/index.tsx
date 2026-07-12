@@ -46,7 +46,7 @@ interface CalendarEvent {
 }
 
 const CalendarPage: React.FC = () => {
-  const { tasks, fetchTasks, createTask } = useGameStore();
+  const { tasks, fetchTasks } = useGameStore();
   const { 
     googleCalendarConnected, 
     appleCalendarConnected,
@@ -64,7 +64,7 @@ const CalendarPage: React.FC = () => {
   const [view, setView] = useState<'month' | 'week' | 'day' | 'list'>('month');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedDateForTask, setSelectedDateForTask] = useState<Date | null>(null);
+  const [, setSelectedDateForTask] = useState<Date | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -486,7 +486,7 @@ const CalendarPage: React.FC = () => {
                           )}
                           <div className="flex items-center gap-2 text-xs">
                             <span className="px-2 py-1 rounded text-white" style={{ backgroundColor: difficulty.color + '40', color: difficulty.color }}>
-                              {difficulty.name}
+                              {difficulty.label}
                             </span>
                             <span className="text-gray-400">
                               {task.category}

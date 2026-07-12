@@ -95,7 +95,7 @@ const SkillTreePage: React.FC = () => {
       import('@tauri-apps/api/core').then(async ({ invoke }) => {
         try {
           console.log('SkillTreePage: Testing direct API call...');
-          const testNodes = await invoke('get_skill_nodes');
+          const testNodes = await invoke<unknown[]>('get_skill_nodes');
           console.log('SkillTreePage: Direct API call result:', { 
             nodeCount: testNodes?.length || 0,
             firstNode: testNodes?.[0] || 'none'
@@ -152,7 +152,7 @@ const SkillTreePage: React.FC = () => {
   // Handle node hover
   const handleNodeHover = useCallback((nodeKey: string | null) => {
     const node = nodeKey ? nodes.find(n => n.node_key === nodeKey) : null;
-    setHoveredNode(node);
+    setHoveredNode(node ?? null);
   }, [nodes]);
 
   // Handle reset tree

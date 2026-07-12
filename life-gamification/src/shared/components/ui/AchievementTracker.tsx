@@ -31,7 +31,7 @@ const AchievementTracker = () => {
         return task.completed_at && new Date(task.completed_at).toDateString() === today;
       }).length;
       const currentLevel = user?.level || 1;
-      const currentStreak = user?.streak_count || 0;
+      const currentStreak = 0; // Streak data is not present on the User payload
 
       // Mock achievements with real progress calculations
       const mockAchievements: AchievementProgress[] = [
@@ -113,8 +113,8 @@ const AchievementTracker = () => {
         .reverse()
         .map(ach => ({
           id: ach.achievement_id.toString(),
-          name: ach.name || 'Achievement Unlocked',
-          description: ach.description || 'You did something awesome!',
+          name: ach.achievement?.name || 'Achievement Unlocked',
+          description: ach.achievement?.description || 'You did something awesome!',
           category: 'unlocked',
           rarity: 'common' as const,
           icon: Trophy,

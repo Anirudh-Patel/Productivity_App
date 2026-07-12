@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useAudio, type AudioSoundId } from '../shared/components/audio/AudioManager'
+import { useAudio, type AudioSoundId, type AudioPlayOptions } from '../shared/components/audio/AudioManager'
 import type { Achievement } from '../types'
 
 interface TaskCompletionAudioOptions {
@@ -61,7 +61,6 @@ export const useGameAudio = () => {
     const { newLevel, milestone = false } = options
 
     // Create ascending tone sequence based on level
-    const baseFreq = 440 // A4
     const levelTones = []
     
     // Build up sequence
@@ -161,7 +160,7 @@ export const useGameAudio = () => {
   }, [audio])
 
   const playShopPurchaseAudio = useCallback(async (cost: number) => {
-    const sequence = [
+    const sequence: Array<{ soundId: AudioSoundId; delay?: number; options?: AudioPlayOptions }> = [
       {
         soundId: 'coin' as AudioSoundId,
         delay: 0,

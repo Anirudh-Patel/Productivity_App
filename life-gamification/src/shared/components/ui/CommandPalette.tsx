@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Search, Settings, Home, Trophy, Package, 
-  Calendar, BarChart3, User, Zap, Crown, BookOpen,
+  BarChart3, User, Zap, Crown, BookOpen,
   Target, Clock, TrendingUp, Star, Gamepad2, Palette
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -30,7 +30,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onOpenCh
   const [value, setValue] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const navigate = useNavigate();
-  const { createTask, user, completeTask, tasks, fetchUser, fetchAchievements } = useGameStore();
+  const { user, completeTask, tasks, fetchUser, fetchAchievements } = useGameStore();
 
   // Core application commands
   const coreCommands: CommandItem[] = [

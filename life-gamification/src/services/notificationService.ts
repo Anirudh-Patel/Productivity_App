@@ -33,7 +33,7 @@ class NotificationService {
     this.toastContext = context;
   }
 
-  private addToNotificationStore(type: GameEvent['type'], title: string, message: string, data?: any) {
+  private addToNotificationStore(type: GameEvent['type'] | 'system', title: string, message: string, data?: any) {
     // Get the store instance - this will work because the component using the service will be inside the provider
     const { addNotification } = useNotificationStore.getState();
     
@@ -201,6 +201,42 @@ class NotificationService {
       type: 'quest_chain_completed',
       data: { questChainName, questChainReward: reward }
     });
+  }
+
+  // Generic system notification (info toast + notification center entry)
+  notifySystem(title: string, message: string) {
+    this.toastContext?.info(title, message, 4000);
+    const { addNotification } = useNotificationStore.getState();
+    addNotification(createSystemNotification(title, message));
+  }
+
+  notifySuccess(title: string, message?: string) {
+    this.toastContext?.success(title, message, 4000);
+    const { addNotification } = useNotificationStore.getState();
+    addNotification(createSystemNotification(title, message ?? ''));
+  }
+
+  notifyError(title: string, message?: string) {
+    this.toastContext?.error(title, message);
+    const { addNotification } = useNotificationStore.getState();
+    addNotification(createSystemNotification(title, message ?? ''));
+  }
+
+  notifyTaskCreated(taskName: string) {
+    this.notifySystem('Quest Created', `New quest added: "${taskName}"`);
+  }
+
+  // Alias matching older call sites
+  notifyAchievement(name: string, description: string, rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' = 'common') {
+    this.notifyAchievementUnlocked(name, description, rarity);
+  }
+
+  notifyItemPurchased(itemName: string) {
+    this.notifySystem('Item Purchased', `Purchased: ${itemName}`);
+  }
+
+  notifyItemUsed(itemName: string) {
+    this.notifySystem('Item Used', `Used: ${itemName}`);
   }
 
   // Combo notifications for complex events

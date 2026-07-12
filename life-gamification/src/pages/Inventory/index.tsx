@@ -75,7 +75,7 @@ const Inventory = () => {
     setEquipingTitleId(item.id)
     
     try {
-      const isCurrentlyEquipped = user?.active_title === item.name
+      const isCurrentlyEquipped = user?.equipped_title === item.name
       
       if (isCurrentlyEquipped) {
         await unequipTitle()
@@ -196,7 +196,7 @@ const Inventory = () => {
                       onClick={() => handleEquipTitle(item)}
                       disabled={equipingTitleId === item.id}
                       className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        user?.active_title === item.name
+                        user?.equipped_title === item.name
                           ? 'bg-red-600 hover:bg-red-700 text-white'
                           : equipingTitleId === item.id
                           ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
@@ -208,7 +208,7 @@ const Inventory = () => {
                       )}
                       {equipingTitleId === item.id
                         ? 'Updating...'
-                        : user?.active_title === item.name
+                        : user?.equipped_title === item.name
                         ? 'Unequip Title'
                         : 'Equip Title'
                       }

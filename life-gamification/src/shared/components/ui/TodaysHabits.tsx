@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Flame, CheckCircle2, Circle, Calendar } from 'lucide-react';
 import { useGameStore } from '../../../store/gameStore';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task } from '../../../types';
 
 interface TodaysHabitsProps {
   onTaskCompleted?: () => void;
@@ -13,13 +12,11 @@ export const TodaysHabits = ({ onTaskCompleted }: TodaysHabitsProps) => {
   const [loading, setLoading] = useState(false);
   const [generatingInstances, setGeneratingInstances] = useState(false);
 
-  // Filter for today's recurring task instances. The store keeps tasks split
-  // into active/completed lists; today's habits can live in either.
-  const today = new Date().toISOString().split('T')[0];
+  // Filter for today's recurring task instances (active and completed)
   const todaysHabits = [...tasks.active, ...tasks.completed].filter(
-    (task: Task) =>
-      (task as any).parent_recurring_task_id != null &&
-      (task as any).instance_date === today
+    (task) =>
+      task.parent_recurring_task_id != null &&
+      task.instance_date === new Date().toISOString().split('T')[0]
   );
 
   // Generate recurring instances on mount

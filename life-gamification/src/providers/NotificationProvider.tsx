@@ -80,21 +80,28 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
     };
   }, [notificationService, addNotification]);
 
-  // Monitor user level changes to trigger level up notifications
+  // Monitor user level changes to trigger level up notifications.
+  // The backend doesn't send a previous level, so track it locally.
+  const previousLevelRef = useRef<number | null>(null);
   useEffect(() => {
-    if (user?.level && user.previous_level && user.level > user.previous_level) {
+    const previousLevel = previousLevelRef.current;
+    if (user?.level == null) return;
+
+    if (previousLevel !== null && user.level > previousLevel) {
       // Show Solo Leveling style level up animation
       setLevelUpAnimation({ visible: true, level: user.level });
-      
+
       // Also show regular notification
-      notificationService.notifyLevelUp(user.level, user.previous_level);
-      
+      notificationService.notifyLevelUp(user.level, previousLevel);
+
       // Hide animation after 3 seconds
       setTimeout(() => {
         setLevelUpAnimation(prev => ({ ...prev, visible: false }));
       }, 3000);
     }
-  }, [user?.level, user?.previous_level, notificationService]);
+
+    previousLevelRef.current = user.level;
+  }, [user?.level, notificationService]);
   
   // Listen for quest completions or system messages
   useEffect(() => {

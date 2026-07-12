@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Keyboard, Search, Navigation, Settings, Zap, BookOpen, Target, Gamepad2, Eye, Sparkles } from 'lucide-react'
-import { useKeyboardShortcuts, formatShortcut } from '../../../hooks/useKeyboardShortcuts'
+import { X, Keyboard, Search, Navigation, Settings, Target, Gamepad2, Eye, Sparkles } from 'lucide-react'
+import { useKeyboardShortcuts } from '../../../hooks/useKeyboardShortcuts'
 import { FadeIn } from './AnimatedComponents'
 
 const KeyboardShortcutsModal = () => {

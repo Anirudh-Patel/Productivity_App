@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Move, Eye, EyeOff, Maximize2 } from 'lucide-react';
+import { X, Eye, Maximize2 } from 'lucide-react';
 
 interface AnchorPoint {
   id: string;
@@ -25,7 +25,6 @@ export const LayoutDebugger: React.FC = () => {
   const [anchorPoints, setAnchorPoints] = useState<AnchorPoint[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showMeasurements, setShowMeasurements] = useState(true);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });

@@ -186,7 +186,7 @@ export const createTaskCompletionNotification = (taskName: string, xpGained: num
   data: { xpAmount: xpGained }
 })
 
-export const createLevelUpNotification = (newLevel: number, previousLevel: number): Omit<Notification, 'id' | 'timestamp' | 'read'> => ({
+export const createLevelUpNotification = (newLevel: number, _previousLevel: number): Omit<Notification, 'id' | 'timestamp' | 'read'> => ({
   type: 'level_up',
   title: 'Level Up! 🆙',
   message: `Congratulations! You've reached level ${newLevel}`,

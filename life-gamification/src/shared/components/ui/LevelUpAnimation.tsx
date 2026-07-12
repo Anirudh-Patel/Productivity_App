@@ -7,12 +7,9 @@ import {
   Zap,
   Award,
   Sparkles,
-  ArrowUp,
   ArrowRight,
-  Trophy,
-  Target
+  Trophy
 } from 'lucide-react'
-import { FadeIn } from './AnimatedComponents'
 
 interface LevelUpAnimationProps {
   isVisible: boolean

@@ -51,7 +51,7 @@ export const useTasks = () => {
     refetchOnWindowFocus: true,
     select: (tasks) => ({
       all: tasks,
-      active: tasks.filter(t => t.status === 'active' || t.status === 'in_progress'),
+      active: tasks.filter(t => t.status === 'active'),
       completed: tasks.filter(t => t.status === 'completed')
     })
   });
@@ -120,7 +120,7 @@ export const useCreateTask = () => {
       
       return { previousTasks };
     },
-    onError: (err, newTask, context) => {
+    onError: (_err, _newTask, context) => {
       // Rollback on error
       if (context?.previousTasks) {
         queryClient.setQueryData(queryKeys.tasks, context.previousTasks);
@@ -166,7 +166,7 @@ export const useCompleteTask = () => {
       
       notificationService.notifyTaskCompleted(completedTask.title, completedTask.base_experience_reward);
     },
-    onError: (err, taskId, context) => {
+    onError: (_err, _taskId, context) => {
       if (context?.previousTasks) {
         queryClient.setQueryData(queryKeys.tasks, context.previousTasks);
       }
@@ -238,12 +238,12 @@ export const useInventory = () => {
     select: (items) => ({
       all: items,
       byCategory: items.reduce((acc, item) => {
-        const category = item.category || 'misc';
+        const category = item.item_type || 'misc';
         if (!acc[category]) acc[category] = [];
         acc[category].push(item);
         return acc;
       }, {} as Record<string, InventoryItem[]>),
-      totalValue: items.reduce((total, item) => total + (item.value || 0) * item.quantity, 0)
+      totalQuantity: items.reduce((total, item) => total + item.quantity, 0)
     })
   });
 };
@@ -314,7 +314,7 @@ export const useBuffs = () => {
 export const useCalendarEvents = () => {
   return useQuery({
     queryKey: queryKeys.calendar,
-    queryFn: () => invoke('get_calendar_events') as Promise<any[]>,
+    queryFn: () => invoke('get_apple_calendar_events') as Promise<unknown[]>,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false
   });

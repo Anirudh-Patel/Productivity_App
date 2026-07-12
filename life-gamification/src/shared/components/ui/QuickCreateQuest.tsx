@@ -15,7 +15,7 @@ interface QuickCreateQuestProps {
 export const QuickCreateQuest = ({ userLevel, completedTasks, onCreateQuest }: QuickCreateQuestProps) => {
   useRenderPerformance('QuickCreateQuest', process.env.NODE_ENV === 'development');
   
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [, setSelectedCategory] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<QuestTemplate | null>(null);
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
   const [generatedQuest, setGeneratedQuest] = useState<{ title: string; description: string } | null>(null);
@@ -62,7 +62,7 @@ export const QuickCreateQuest = ({ userLevel, completedTasks, onCreateQuest }: Q
     );
 
     // Auto-adjust difficulty based on performance
-    const { adjustedDifficulty, adjustmentReason } = autoAdjustTaskDifficulty(
+    const { adjustedDifficulty } = autoAdjustTaskDifficulty(
       selectedTemplate.difficulty,
       selectedTemplate.category,
       userStats,

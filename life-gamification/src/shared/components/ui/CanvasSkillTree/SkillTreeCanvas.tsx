@@ -33,7 +33,8 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const lastRenderTimeRef = useRef(0);
   
   // Debug logging
   console.log('SkillTreeCanvas: Rendering with', {
@@ -291,12 +292,11 @@ export const SkillTreeCanvas: React.FC<SkillTreeCanvasProps> = ({
     
     // Schedule next frame - limit to 60fps
     const renderNow = performance.now();
-    if (!window.lastRenderTime) window.lastRenderTime = 0;
-    if (renderNow - window.lastRenderTime < 16) { // ~60fps limit
+    if (renderNow - lastRenderTimeRef.current < 16) { // ~60fps limit
       animationFrameRef.current = requestAnimationFrame(render);
       return;
     }
-    window.lastRenderTime = renderNow;
+    lastRenderTimeRef.current = renderNow;
     
     animationFrameRef.current = requestAnimationFrame(render);
   }, [viewport, nodes, connections, allocatedNodes, hoveredNode, availablePoints, userLevel, viewportManager, renderer]);
