@@ -50,3 +50,13 @@ Robust skin library from user's series list (~30 manhwa/manhua/anime titles) usi
 ## Verification
 
 Every sprite visually reviewed at 8x; manifest loads; tsc-gated build passes; layered render shows face of base skin with all slots equipped.
+
+## Addendum (2026-07-13, user feedback): gear fitting system
+
+Problem: AI sprites don't share the hand-drawn canonical grid — heads/torsos vary, so fixed 32×48 overlays misalign (hats float, armor looks pasted-on and small).
+
+Decision (recommended option chosen): per-sprite anchor extraction + render-time gear transforms.
+- `tools/pixelart/anchors.py` computes per character from alpha silhouette: headTop/headCx/headW (top 40% band), torsoTop/torsoCx/torsoW/torsoH (45-70% band), handL/handR (extreme cols at 55-70% rows), bodyH. Stored in manifest per character as `anchors`.
+- Gear entries gain `fit`: head|torso|handL|handR|body. Reference anchors (the canonical grid gear was authored against): headTop 1, headCx 15.5, headW 20, torsoTop 19, torsoCx 15.5, torsoW 16, torsoH 12, handL (6,27), handR (25,27), bodyH 41.
+- LayeredSprite applies per-layer CSS transform (translate+scale, pixel units × display scale, nearest-neighbor): headgear scales to headW ratio and sits at headTop; chest scales to torso box; weapons translate to hand anchor (no scale); capes/auras scale to body height and center on torso.
+- Chest pieces redesigned to read as worn: shoulder coverage + sleeve hints, full torso width, open front so base outfit shows.
