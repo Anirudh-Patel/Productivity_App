@@ -60,3 +60,8 @@ Decision (recommended option chosen): per-sprite anchor extraction + render-time
 - Gear entries gain `fit`: head|torso|handL|handR|body. Reference anchors (the canonical grid gear was authored against): headTop 1, headCx 15.5, headW 20, torsoTop 19, torsoCx 15.5, torsoW 16, torsoH 12, handL (6,27), handR (25,27), bodyH 41.
 - LayeredSprite applies per-layer CSS transform (translate+scale, pixel units × display scale, nearest-neighbor): headgear scales to headW ratio and sits at headTop; chest scales to torso box; weapons translate to hand anchor (no scale); capes/auras scale to body height and center on torso.
 - Chest pieces redesigned to read as worn: shoulder coverage + sleeve hints, full torso width, open front so base outfit shows.
+
+## Addendum 2 (2026-07-14): silhouette-conforming chest armor + top-100 library wave
+
+- Chest gear must read as WORN: LayeredSprite upgraded to a canvas compositor. Draw order: aura → cape → base → chest → weapon → headgear, where the chest layer is alpha-masked to the BASE character's silhouette dilated by 2px within torso rows (armor conforms to each body's shape; pauldrons may extend into the dilation allowance). Fallback to img-stack when canvas unavailable.
+- New character/gear wave sourced from user's library export (top 100 by rating, minus already-covered series); per-series gear inspiration continues.
