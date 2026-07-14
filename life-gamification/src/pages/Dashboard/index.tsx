@@ -5,6 +5,7 @@ import { useGameStore } from '../../store/gameStore'
 import { useCharacterSkinStore } from '../../store/characterSkinStore'
 import { analyzeUserPerformance, generateDifficultyRecommendation } from '../../utils/difficultyAdjustment'
 import { FadeIn } from '../../shared/components/ui/AnimatedComponents'
+import { LayeredSprite } from '../../shared/components/ui/LayeredSprite'
 import QuickStartWidget from '../../shared/components/ui/QuickStartWidget'
 import AchievementTracker from '../../shared/components/ui/AchievementTracker'
 import NotificationDemo from '../../shared/components/ui/NotificationDemo'
@@ -20,8 +21,13 @@ const Dashboard = () => {
   // Character skin (display preference) for the dashboard avatar card.
   const skins = useCharacterSkinStore((s) => s.skins);
   const selectedId = useCharacterSkinStore((s) => s.selectedId);
+  const gear = useCharacterSkinStore((s) => s.gear);
+  const equippedGear = useCharacterSkinStore((s) => s.equippedGear);
   const loadManifest = useCharacterSkinStore((s) => s.loadManifest);
   const selectedSkin = selectedId ? skins.find((s) => s.id === selectedId) ?? null : null;
+  const equippedGearItems = selectedSkin
+    ? gear.filter((g) => equippedGear[g.slot] === g.id)
+    : [];
 
   useEffect(() => {
     loadManifest();
@@ -50,14 +56,7 @@ const Dashboard = () => {
               {/* Selected character skin avatar — only shown when a skin is chosen */}
               {selectedSkin && (
                 <div className="flex flex-col items-center gap-1 rounded-lg border border-gray-700 bg-theme-bg/60 px-3 py-2 shrink-0">
-                  <img
-                    src={selectedSkin.file}
-                    alt={selectedSkin.displayName}
-                    width={selectedSkin.width * 2}
-                    height={selectedSkin.height * 2}
-                    style={{ imageRendering: 'pixelated' }}
-                    className="pointer-events-none"
-                  />
+                  <LayeredSprite skin={selectedSkin} gear={equippedGearItems} scale={2} />
                   <span className="text-[10px] text-gray-400 max-w-[6rem] truncate">
                     Lv {user?.level || 1}
                   </span>

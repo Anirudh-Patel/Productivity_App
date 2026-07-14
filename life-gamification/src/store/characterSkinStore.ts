@@ -7,33 +7,83 @@
 import { create } from 'zustand';
 
 const STORAGE_KEY = 'character-skin';
+const GEAR_STORAGE_KEY = 'character-gear';
 
 /** A single selectable character sprite, as described in manifest.json. */
 export interface CharacterSkin {
   id: string;
   displayName: string;
   series: string;
+  /** Optional evolution/form variant label (e.g. "Base", "Awakened"). */
+  form?: string;
   /** Absolute path from the public root, e.g. "/assets/characters/goku.png". */
   file: string;
   width: number;
   height: number;
 }
 
+/** Equipment slots a gear item can occupy. One item may be equipped per slot. */
+export type GearSlot = 'weapon' | 'headgear' | 'chest' | 'cape' | 'aura';
+
+/**
+ * Draw order relative to the base character sprite.
+ * - "over": drawn on top of the base (chest, weapon, headgear).
+ * - "under": drawn behind the base (capes, auras).
+ */
+export type GearZIndex = 'over' | 'under';
+
+/** A single equippable gear sprite, as described in the manifest `gear` section. */
+export interface GearItem {
+  id: string;
+  displayName: string;
+  slot: GearSlot;
+  zIndex: GearZIndex;
+  /** Absolute path from the public root, e.g. "/assets/characters/gear/straw-hat.png". */
+  file: string;
+  width: number;
+  height: number;
+}
+
+/** All slots, in a stable display order for the Equipment page. */
+export const GEAR_SLOTS: readonly GearSlot[] = ['weapon', 'headgear', 'chest', 'cape', 'aura'];
+
+/** Human-readable slot labels. */
+export const GEAR_SLOT_LABELS: Record<GearSlot, string> = {
+  weapon: 'Weapon',
+  headgear: 'Headgear',
+  chest: 'Chest',
+  cape: 'Cape',
+  aura: 'Aura',
+};
+
+/** One equipped gear id per slot. Absent slots are empty. */
+export type EquippedGear = Partial<Record<GearSlot, string>>;
+
 interface CharacterSkinManifest {
   characters: CharacterSkin[];
+  gear?: GearItem[];
 }
 
 interface CharacterSkinState {
   skins: CharacterSkin[];
+  gear: GearItem[];
   selectedId: string | null;
+  /** Map of slot -> equipped gear id. */
+  equippedGear: EquippedGear;
   loading: boolean;
   loaded: boolean;
-  /** Fetches the manifest. Tolerates a missing/invalid manifest by falling back to an empty list. */
+  /** Fetches the manifest. Tolerates a missing/invalid manifest by falling back to empty lists. */
   loadManifest: () => Promise<void>;
   /** Selects a skin (or clears the selection) and persists it to localStorage. */
   selectSkin: (id: string | null) => void;
+  /** Equips a gear id into its slot, or clears the slot when id is null. Persists to localStorage. */
+  equipGear: (slot: GearSlot, id: string | null) => void;
+  /** Clears all equipped gear. */
+  unequipAllGear: () => void;
   /** Convenience selector: the currently selected skin object, or null. */
   getSelectedSkin: () => CharacterSkin | null;
+  /** Convenience selector: the equipped gear items, resolved to objects. */
+  getEquippedGearItems: () => GearItem[];
 }
 
 function readStoredSelection(): string | null {
@@ -56,6 +106,35 @@ function writeStoredSelection(id: string | null): void {
   }
 }
 
+function readStoredGear(): EquippedGear {
+  try {
+    const raw = localStorage.getItem(GEAR_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    const result: EquippedGear = {};
+    for (const slot of GEAR_SLOTS) {
+      const value = (parsed as Record<string, unknown>)[slot];
+      if (typeof value === 'string') result[slot] = value;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredGear(gear: EquippedGear): void {
+  try {
+    if (Object.keys(gear).length === 0) {
+      localStorage.removeItem(GEAR_STORAGE_KEY);
+    } else {
+      localStorage.setItem(GEAR_STORAGE_KEY, JSON.stringify(gear));
+    }
+  } catch {
+    // localStorage unavailable — selection is simply not persisted.
+  }
+}
+
 function isCharacterSkin(value: unknown): value is CharacterSkin {
   if (typeof value !== 'object' || value === null) return false;
   const c = value as Record<string, unknown>;
@@ -63,15 +142,33 @@ function isCharacterSkin(value: unknown): value is CharacterSkin {
     typeof c.id === 'string' &&
     typeof c.displayName === 'string' &&
     typeof c.series === 'string' &&
+    (c.form === undefined || typeof c.form === 'string') &&
     typeof c.file === 'string' &&
     typeof c.width === 'number' &&
     typeof c.height === 'number'
   );
 }
 
+function isGearItem(value: unknown): value is GearItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const g = value as Record<string, unknown>;
+  return (
+    typeof g.id === 'string' &&
+    typeof g.displayName === 'string' &&
+    typeof g.slot === 'string' &&
+    (GEAR_SLOTS as readonly string[]).includes(g.slot) &&
+    (g.zIndex === 'over' || g.zIndex === 'under') &&
+    typeof g.file === 'string' &&
+    typeof g.width === 'number' &&
+    typeof g.height === 'number'
+  );
+}
+
 export const useCharacterSkinStore = create<CharacterSkinState>((set, get) => ({
   skins: [],
+  gear: [],
   selectedId: readStoredSelection(),
+  equippedGear: readStoredGear(),
   loading: false,
   loaded: false,
 
@@ -80,29 +177,50 @@ export const useCharacterSkinStore = create<CharacterSkinState>((set, get) => ({
     try {
       const response = await fetch('/assets/characters/manifest.json');
       if (!response.ok) {
-        // 404 or similar — manifest absent. Graceful empty list.
-        set({ skins: [], loading: false, loaded: true });
+        // 404 or similar — manifest absent. Graceful empty lists.
+        set({ skins: [], gear: [], loading: false, loaded: true });
         return;
       }
 
       const data: unknown = await response.json();
-      const rawList =
-        data && typeof data === 'object' && Array.isArray((data as CharacterSkinManifest).characters)
+      const isManifest = data && typeof data === 'object';
+      const rawSkins =
+        isManifest && Array.isArray((data as CharacterSkinManifest).characters)
           ? (data as CharacterSkinManifest).characters
           : [];
-      const skins = rawList.filter(isCharacterSkin);
+      const skins = rawSkins.filter(isCharacterSkin);
 
-      // If the persisted selection is no longer valid, clear it.
-      const stored = get().selectedId;
-      const selectedId = stored && skins.some((s) => s.id === stored) ? stored : null;
-      if (selectedId !== stored) {
+      // Gear section is optional — older manifests omit it (gear features hidden).
+      const rawGear =
+        isManifest && Array.isArray((data as CharacterSkinManifest).gear)
+          ? (data as CharacterSkinManifest).gear ?? []
+          : [];
+      const gear = rawGear.filter(isGearItem);
+
+      // If the persisted skin selection is no longer valid, clear it.
+      const storedSkin = get().selectedId;
+      const selectedId = storedSkin && skins.some((s) => s.id === storedSkin) ? storedSkin : null;
+      if (selectedId !== storedSkin) {
         writeStoredSelection(selectedId);
       }
 
-      set({ skins, selectedId, loading: false, loaded: true });
+      // Drop any equipped gear whose id no longer exists in the manifest.
+      const storedGear = get().equippedGear;
+      const equippedGear: EquippedGear = {};
+      for (const slot of GEAR_SLOTS) {
+        const id = storedGear[slot];
+        if (id && gear.some((g) => g.id === id && g.slot === slot)) {
+          equippedGear[slot] = id;
+        }
+      }
+      if (Object.keys(equippedGear).length !== Object.keys(storedGear).length) {
+        writeStoredGear(equippedGear);
+      }
+
+      set({ skins, gear, selectedId, equippedGear, loading: false, loaded: true });
     } catch {
       // Network error, malformed JSON, etc. — treat as empty.
-      set({ skins: [], loading: false, loaded: true });
+      set({ skins: [], gear: [], loading: false, loaded: true });
     }
   },
 
@@ -111,9 +229,37 @@ export const useCharacterSkinStore = create<CharacterSkinState>((set, get) => ({
     set({ selectedId: id });
   },
 
+  equipGear: (slot: GearSlot, id: string | null) => {
+    const next: EquippedGear = { ...get().equippedGear };
+    if (id === null) {
+      delete next[slot];
+    } else {
+      next[slot] = id;
+    }
+    writeStoredGear(next);
+    set({ equippedGear: next });
+  },
+
+  unequipAllGear: () => {
+    writeStoredGear({});
+    set({ equippedGear: {} });
+  },
+
   getSelectedSkin: () => {
     const { skins, selectedId } = get();
     if (!selectedId) return null;
     return skins.find((s) => s.id === selectedId) ?? null;
+  },
+
+  getEquippedGearItems: () => {
+    const { gear, equippedGear } = get();
+    const items: GearItem[] = [];
+    for (const slot of GEAR_SLOTS) {
+      const id = equippedGear[slot];
+      if (!id) continue;
+      const item = gear.find((g) => g.id === id);
+      if (item) items.push(item);
+    }
+    return items;
   },
 }));
