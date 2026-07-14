@@ -9,6 +9,27 @@ import { create } from 'zustand';
 const STORAGE_KEY = 'character-skin';
 const GEAR_STORAGE_KEY = 'character-gear';
 
+/**
+ * Per-sprite anchor points computed from the alpha silhouette by
+ * tools/pixelart/anchors.py. All values are in native sprite pixel units.
+ * Used by LayeredSprite to fit gear overlays to each character's proportions.
+ */
+export interface SpriteAnchors {
+  headTop: number;
+  headCx: number;
+  headW: number;
+  torsoTop: number;
+  torsoCx: number;
+  torsoW: number;
+  torsoH: number;
+  handLx: number;
+  handLy: number;
+  handRx: number;
+  handRy: number;
+  bodyTop: number;
+  bodyH: number;
+}
+
 /** A single selectable character sprite, as described in manifest.json. */
 export interface CharacterSkin {
   id: string;
@@ -20,6 +41,8 @@ export interface CharacterSkin {
   file: string;
   width: number;
   height: number;
+  /** Optional fitting anchors; absent on older manifests (gear renders unfitted). */
+  anchors?: SpriteAnchors;
 }
 
 /** Equipment slots a gear item can occupy. One item may be equipped per slot. */
@@ -32,6 +55,13 @@ export type GearSlot = 'weapon' | 'headgear' | 'chest' | 'cape' | 'aura';
  */
 export type GearZIndex = 'over' | 'under';
 
+/**
+ * Which character anchor a gear layer is fitted to at render time:
+ * headgear → "head", chest → "torso", weapons → "handL"/"handR",
+ * capes/auras → "body". Absent = render untransformed (legacy behavior).
+ */
+export type GearFit = 'head' | 'torso' | 'handL' | 'handR' | 'body';
+
 /** A single equippable gear sprite, as described in the manifest `gear` section. */
 export interface GearItem {
   id: string;
@@ -42,6 +72,8 @@ export interface GearItem {
   file: string;
   width: number;
   height: number;
+  /** Optional fit target; absent on older manifests (gear renders unfitted). */
+  fit?: GearFit;
 }
 
 /** All slots, in a stable display order for the Equipment page. */
@@ -149,6 +181,42 @@ function isCharacterSkin(value: unknown): value is CharacterSkin {
   );
 }
 
+const ANCHOR_KEYS: readonly (keyof SpriteAnchors)[] = [
+  'headTop',
+  'headCx',
+  'headW',
+  'torsoTop',
+  'torsoCx',
+  'torsoW',
+  'torsoH',
+  'handLx',
+  'handLy',
+  'handRx',
+  'handRy',
+  'bodyTop',
+  'bodyH',
+];
+
+/** Lenient anchor parse: any missing/non-numeric field ⇒ undefined (no fitting). */
+function parseAnchors(value: unknown): SpriteAnchors | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const rec = value as Record<string, unknown>;
+  const result: Partial<SpriteAnchors> = {};
+  for (const key of ANCHOR_KEYS) {
+    const v = rec[key];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return undefined;
+    result[key] = v;
+  }
+  return result as SpriteAnchors;
+}
+
+const GEAR_FITS: readonly GearFit[] = ['head', 'torso', 'handL', 'handR', 'body'];
+
+/** Lenient fit parse: unknown values ⇒ undefined (no fitting). */
+function parseFit(value: unknown): GearFit | undefined {
+  return (GEAR_FITS as readonly unknown[]).includes(value) ? (value as GearFit) : undefined;
+}
+
 function isGearItem(value: unknown): value is GearItem {
   if (typeof value !== 'object' || value === null) return false;
   const g = value as Record<string, unknown>;
@@ -188,14 +256,20 @@ export const useCharacterSkinStore = create<CharacterSkinState>((set, get) => ({
         isManifest && Array.isArray((data as CharacterSkinManifest).characters)
           ? (data as CharacterSkinManifest).characters
           : [];
-      const skins = rawSkins.filter(isCharacterSkin);
+      const skins = rawSkins.filter(isCharacterSkin).map((s) => ({
+        ...s,
+        anchors: parseAnchors((s as { anchors?: unknown }).anchors),
+      }));
 
       // Gear section is optional — older manifests omit it (gear features hidden).
       const rawGear =
         isManifest && Array.isArray((data as CharacterSkinManifest).gear)
           ? (data as CharacterSkinManifest).gear ?? []
           : [];
-      const gear = rawGear.filter(isGearItem);
+      const gear = rawGear.filter(isGearItem).map((g) => ({
+        ...g,
+        fit: parseFit((g as { fit?: unknown }).fit),
+      }));
 
       // If the persisted skin selection is no longer valid, clear it.
       const storedSkin = get().selectedId;
